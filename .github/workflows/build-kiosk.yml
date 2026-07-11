@@ -7,12 +7,7 @@ name: Build Kiosk Client
 
 on:
   push:
-    branches: [main]
-    paths:
-      - 'apps/kiosk-client/**'
-      - 'packages/shared/**'
-      - 'pnpm-lock.yaml'
-      - '.github/workflows/build-kiosk.yml'
+    tags: ['v*']
   workflow_dispatch:
 
 env:
