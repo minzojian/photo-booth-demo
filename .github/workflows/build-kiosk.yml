@@ -130,6 +130,11 @@ jobs:
           name: kiosk-windows-x64
           path: release/windows
 
+      - name: Delete existing release (if any)
+        run: gh release delete ${{ steps.version.outputs.value }} --yes 2>/dev/null || true
+        env:
+          GH_TOKEN: ${{ github.token }}
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -137,7 +142,6 @@ jobs:
           name: ${{ steps.version.outputs.value }}
           draft: false
           prerelease: false
-          overwrite: true
           files: |
             release/macos/*.zip
             release/macos/*.blockmap
