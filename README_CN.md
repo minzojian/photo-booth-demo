@@ -215,7 +215,8 @@ cd apps/kiosk-client
 pnpm rebuild:native    # 首次：为 Electron ABI 重编 better-sqlite3
 pnpm dev
 
-# 前台管理面板：启动后在拍照界面输入 PIN 码即可进入
+# 前台管理面板：按 Cmd+Shift+A（macOS）/ Ctrl+Shift+A（Windows）快捷键，
+# 或 3 秒内在拍照界面右上角连续点击 5 次，即可弹出 PIN 码输入框。
 # 默认 PIN: 8888（可通过 KIOSK_ADMIN_PIN 环境变量修改）
 # 管理面板可查看版本号、调整 API 地址、检查 OTA 更新
 # 窗口化开发模式（不锁全屏）：

@@ -212,6 +212,12 @@ cd apps/admin-dashboard && pnpm dev
 cd apps/kiosk-client
 pnpm rebuild:native    # First time: rebuild better-sqlite3 for Electron ABI
 pnpm dev
+
+# Admin panel: press Cmd+Shift+A (macOS) / Ctrl+Shift+A (Windows) or tap the
+# top-right corner 5 times within 3s on the capture screen to open PIN prompt.
+# Default PIN: 8888 (override via KIOSK_ADMIN_PIN env var).
+# Or start in windowed mode for development:
+KIOSK_WINDOWED=1 pnpm dev
 ```
 
 ## Environment Variables (cloud-server)
