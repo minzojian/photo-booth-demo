@@ -4,6 +4,22 @@ const crypto = require('node:crypto');
 
 const PRODUCT = 'PhotoBoothKiosk';
 const RELEASE_DIR = path.join(__dirname, '..', 'release');
+const BLOCK_SIZE = 64 * 1024; // 64 KB per block
+
+/** 为文件生成 electron-updater blockmap（SHA-512 per 64KB chunk → base64） */
+function generateBlockmap(filePath, blockmapPath) {
+  if (existsSync(blockmapPath)) return; // already exists
+  const buf = readFileSync(filePath);
+  const blocks = [];
+  for (let offset = 0; offset < buf.length; offset += BLOCK_SIZE) {
+    const end = Math.min(offset + BLOCK_SIZE, buf.length);
+    const chunk = buf.subarray(offset, end);
+    const hash = crypto.createHash('sha512').update(chunk).digest('base64');
+    blocks.push({ size: end - offset, sha512: hash });
+  }
+  writeFileSync(blockmapPath, JSON.stringify(blocks));
+  console.log('[rename-with-hash] blockmap generated:', path.basename(blockmapPath), `(${blocks.length} blocks)`);
+}
 
 function parseVersionFromName(name) {
   const m = name.match(/-(\d+\.\d+\.\d+)-/);
@@ -22,9 +38,10 @@ function cleanupSameVersionArtifacts(outDir, version, archOs, keepNames) {
   const prefix = `${PRODUCT}-${version}-${archOs}`;
   const files = readdirSync(outDir);
   for (const f of files) {
-    const isZip = f.endsWith('.zip');
-    const isBlockmap = f.endsWith('.zip.blockmap');
-    if (!isZip && !isBlockmap) continue;
+    const isZip = f.endsWith('.zip') && !f.endsWith('.zip.blockmap');
+    const isExe = f.endsWith('.exe') && !f.endsWith('.exe.blockmap');
+    const isBlockmap = f.endsWith('.zip.blockmap') || f.endsWith('.exe.blockmap');
+    if (!isZip && !isExe && !isBlockmap) continue;
     if (!f.startsWith(prefix)) continue;
     if (keep.has(f)) continue;
     try {
@@ -64,6 +81,11 @@ function renameZip(zipPath, options = {}) {
   const oldBlockmap = zipPath + '.blockmap';
   const newBlockmap = newZipPath + '.blockmap';
   try { renameSync(oldBlockmap, newBlockmap); console.log('[rename-with-hash] blockmap renamed'); } catch { /* no blockmap */ }
+
+  // 如果 electron-builder 没生成 blockmap（如 Windows zip 目标），自己生成
+  if (!existsSync(newBlockmap)) {
+    try { generateBlockmap(newZipPath, newBlockmap); } catch (e) { console.warn('[rename-with-hash] blockmap generation failed:', e.message); }
+  }
 
   for (const ymlName of ['latest-mac.yml', 'latest.yml']) {
     const ymlFile = path.join(outDir, ymlName);

@@ -70,15 +70,10 @@
       "icon": "build/icon.ico",
       "target": [
         {
-          "target": "nsis",
+          "target": "zip",
           "arch": ["x64"]
         }
       ]
-    },
-    "nsis": {
-      "artifactName": "${productName}-${version}-win-${arch}.${ext}",
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true
     },
     "publish": [
       {

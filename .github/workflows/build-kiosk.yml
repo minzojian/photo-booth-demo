@@ -102,8 +102,8 @@ jobs:
         with:
           name: kiosk-windows-x64
           path: |
-            apps/kiosk-client/release/*.exe
-            apps/kiosk-client/release/*.exe.blockmap
+            apps/kiosk-client/release/*.zip
+            apps/kiosk-client/release/*.blockmap
             apps/kiosk-client/release/*.yml
           if-no-files-found: error
 
@@ -147,7 +147,7 @@ jobs:
             release/macos/*.zip
             release/macos/*.blockmap
             release/macos/*.yml
-            release/windows/*.exe
-            release/windows/*.exe.blockmap
+            release/windows/*.zip
+            release/windows/*.blockmap
             release/windows/*.yml
           fail_on_unmatched_files: false
