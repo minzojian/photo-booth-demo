@@ -1,8 +1,8 @@
 name: Build Kiosk Client
 
 # =============================================================================
-# 构建 Electron 桌面端（macOS ARM64 + Windows x64）
-# Build Electron kiosk client for macOS ARM64 & Windows x64
+# 构建 Electron 桌面端（macOS ARM64 + Windows x64）并发布 GitHub Release
+# Build Electron kiosk client for macOS ARM64 & Windows x64 → GitHub Release
 # =============================================================================
 
 on:
@@ -102,3 +102,47 @@ jobs:
             apps/kiosk-client/release/*.blockmap
             apps/kiosk-client/release/*.yml
           if-no-files-found: error
+
+  # ── GitHub Release ──────────────────────────────────────────────────────
+  release:
+    needs: [build-mac, build-win]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get version
+        id: version
+        run: |
+          VERSION=$(node -p "require('./apps/kiosk-client/package.json').version")
+          echo "value=v$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Download macOS artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: kiosk-macos-arm64
+          path: release/macos
+
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: kiosk-windows-x64
+          path: release/windows
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.value }}
+          name: ${{ steps.version.outputs.value }}
+          draft: false
+          prerelease: false
+          files: |
+            release/macos/*.zip
+            release/macos/*.blockmap
+            release/macos/*.yml
+            release/windows/*.zip
+            release/windows/*.blockmap
+            release/windows/*.yml
+          fail_on_unmatched_files: true
