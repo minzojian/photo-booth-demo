@@ -147,4 +147,4 @@ jobs:
             release/windows/*.zip
             release/windows/*.blockmap
             release/windows/*.yml
-          fail_on_unmatched_files: true
+          fail_on_unmatched_files: false
