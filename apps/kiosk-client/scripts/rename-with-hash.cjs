@@ -1,0 +1,121 @@
+const { renameSync, readFileSync, writeFileSync, readdirSync, unlinkSync, existsSync } = require('node:fs');
+const path = require('node:path');
+const crypto = require('node:crypto');
+
+const PRODUCT = 'PhotoBoothKiosk';
+const RELEASE_DIR = path.join(__dirname, '..', 'release');
+
+function parseVersionFromName(name) {
+  const m = name.match(/-(\d+\.\d+\.\d+)-/);
+  return m ? m[1] : '';
+}
+
+function parsePathFromYml(ymlPath) {
+  if (!existsSync(ymlPath)) return '';
+  const content = readFileSync(ymlPath, 'utf8');
+  const m = content.match(/^path:\s+(.+)$/m);
+  return m ? m[1].trim() : '';
+}
+
+function cleanupSameVersionArtifacts(outDir, version, archOs, keepNames) {
+  const keep = new Set(keepNames);
+  const prefix = `${PRODUCT}-${version}-${archOs}`;
+  const files = readdirSync(outDir);
+  for (const f of files) {
+    const isZip = f.endsWith('.zip');
+    const isBlockmap = f.endsWith('.zip.blockmap');
+    if (!isZip && !isBlockmap) continue;
+    if (!f.startsWith(prefix)) continue;
+    if (keep.has(f)) continue;
+    try {
+      unlinkSync(path.join(outDir, f));
+      console.log('[rename-with-hash] removed stale artifact:', f);
+    } catch {
+      // ignore individual cleanup failures
+    }
+  }
+}
+
+function renameZip(zipPath, options = {}) {
+  const pruneSameVersion = !!options.pruneSameVersion;
+  const outDir = path.dirname(zipPath);
+  const base = path.basename(zipPath);
+
+  // PhotoBoothKiosk-1.0.2-arm64-mac.zip → PhotoBoothKiosk-1.0.2-arm64-mac-{hash}.zip
+  const m = base.match(/-(?<version>\d+\.\d+\.\d+)-(?<archOs>.+)\.zip$/);
+  if (!m) { console.log('[rename-with-hash] skip (cannot parse version):', base); return; }
+
+  const hash = crypto.createHash('md5').update(readFileSync(zipPath)).digest('hex').slice(0, 8);
+  const newBase = `${PRODUCT}-${m.groups.version}-${m.groups.archOs}-${hash}.zip`;
+  const newZipPath = path.join(outDir, newBase);
+  const newBlockmapBase = `${newBase}.blockmap`;
+  if (base === newBase) { console.log('[rename-with-hash] skip (already renamed):', base); return; }
+
+  if (pruneSameVersion) {
+    cleanupSameVersionArtifacts(outDir, m.groups.version, m.groups.archOs, [base, `${base}.blockmap`, newBase, newBlockmapBase]);
+  }
+
+  renameSync(zipPath, newZipPath);
+  console.log('[rename-with-hash]', base, '→', newBase);
+
+  const oldBlockmap = zipPath + '.blockmap';
+  const newBlockmap = newZipPath + '.blockmap';
+  try { renameSync(oldBlockmap, newBlockmap); console.log('[rename-with-hash] blockmap renamed'); } catch { /* no blockmap */ }
+
+  for (const ymlName of ['latest-mac.yml', 'latest.yml']) {
+    const ymlFile = path.join(outDir, ymlName);
+    try {
+      let content = readFileSync(ymlFile, 'utf8');
+      if (content.includes(base)) {
+        content = content.replace(new RegExp(base.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), newBase);
+        writeFileSync(ymlFile, content);
+        console.log('[rename-with-hash] updated', ymlName);
+      }
+    } catch { /* file doesn't exist */ }
+  }
+}
+
+function pickCliTargets(versionArg) {
+  const files = readdirSync(RELEASE_DIR);
+  const unhashedZips = files.filter((f) =>
+    f.startsWith(PRODUCT)
+    && f.endsWith('.zip')
+    && !f.endsWith('.zip.blockmap')
+    && !/-\w{8}\.zip$/.test(f),
+  );
+
+  if (versionArg) {
+    return unhashedZips.filter((f) => parseVersionFromName(f) === versionArg);
+  }
+
+  // 默认只处理当前 yml 指向的目标 zip，避免误处理历史遗留的未重命名 zip。
+  const ymlCandidates = ['latest-mac.yml', 'latest.yml'];
+  for (const ymlName of ymlCandidates) {
+    const ymlPath = path.join(RELEASE_DIR, ymlName);
+    const p = parsePathFromYml(ymlPath);
+    if (!p) continue;
+    const base = path.basename(p);
+    if (unhashedZips.includes(base)) return [base];
+  }
+
+  return unhashedZips;
+}
+
+// 直接调用模式（npm script 串联）
+if (require.main === module) {
+  const versionArgIndex = process.argv.indexOf('--version');
+  const versionArg = versionArgIndex >= 0 ? process.argv[versionArgIndex + 1] : '';
+  const targets = pickCliTargets(versionArg);
+  if (targets.length === 0) {
+    console.log('[rename-with-hash] skip: no target zip found');
+  }
+  for (const f of targets) renameZip(path.join(RELEASE_DIR, f), { pruneSameVersion: true });
+} else {
+  // electron-builder hook 模式
+  exports.default = async function renameWithHash(buildResult) {
+    const zipPaths = (buildResult.artifactPaths || []).filter(p => p.endsWith('.zip') && !p.endsWith('.zip.blockmap'));
+    for (const p of zipPaths) renameZip(p);
+  };
+}
+
+

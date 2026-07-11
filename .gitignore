@@ -39,4 +39,6 @@ pnpm-debug.log*
 .vscode/*
 !.vscode/extensions.json
 scripts
+!scripts/
+!apps/kiosk-client/scripts/
 apps/admin-dashboard/src/.umi*
