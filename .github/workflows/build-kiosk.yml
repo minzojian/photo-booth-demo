@@ -142,6 +142,7 @@ jobs:
           name: ${{ steps.version.outputs.value }}
           draft: false
           prerelease: false
+          overwrite: true
           files: |
             release/macos/*.zip
             release/macos/*.blockmap
