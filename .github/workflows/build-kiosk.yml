@@ -94,6 +94,8 @@ jobs:
           npx electron-builder --win --x64 --publish never "-c.electronVersion=$electronVer"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/rename-with-hash.cjs --version=$(node -p "require('./package.json').version")
+          Write-Host "=== Release directory contents ==="
+          Get-ChildItem release -Name
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
