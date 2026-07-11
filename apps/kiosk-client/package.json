@@ -1,0 +1,86 @@
+{
+  "name": "@lunastudio/kiosk-client",
+  "version": "1.0.1",
+  "private": true,
+  "main": "out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "rebuild:native": "npx -y @electron/rebuild -f -w better-sqlite3",
+    "sign:create-local": "./scripts/create-local-signing-cert.sh",
+    "dist": "CSC_NAME=\"${KIOSK_SIGN_IDENTITY:-PhotoBooth Local Code Signing}\" electron-vite build && CSC_NAME=\"${KIOSK_SIGN_IDENTITY:-PhotoBooth Local Code Signing}\" electron-builder --publish never && node scripts/rename-with-hash.cjs --version=$npm_package_version",
+    "dist:full": "CSC_NAME=\"${KIOSK_SIGN_IDENTITY:-PhotoBooth Local Code Signing}\" electron-vite build && CSC_NAME=\"${KIOSK_SIGN_IDENTITY:-PhotoBooth Local Code Signing}\" electron-builder --publish never -c.npmRebuild=true && node scripts/rename-with-hash.cjs --version=$npm_package_version",
+    "dist:adhoc": "CSC_IDENTITY_AUTO_DISCOVERY=false electron-vite build && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --publish never && node scripts/rename-with-hash.cjs --version=$npm_package_version",
+    "dist:full:adhoc": "CSC_IDENTITY_AUTO_DISCOVERY=false electron-vite build && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --publish never -c.npmRebuild=true && node scripts/rename-with-hash.cjs --version=$npm_package_version",
+    "sign:list": "security find-identity -v -p codesigning || true"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1081.0",
+    "@aws-sdk/lib-storage": "^3.1081.0",
+    "better-sqlite3": "^11.5.0",
+    "cos-nodejs-sdk-v5": "^2.14.6",
+    "electron-updater": "^6.3.9",
+    "nanoid": "^5.0.9",
+    "qrcode": "^1.5.4",
+    "socket.io-client": "^4.8.1"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.11",
+    "@types/qrcode": "^1.5.6",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8",
+    "electron-vite": "^2.3.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11"
+  },
+  "build": {
+    "appId": "com.photo-booth.kiosk",
+    "productName": "PhotoBoothKiosk",
+    "npmRebuild": false,
+    "afterPack": "scripts/after-pack.cjs",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "out/**/*",
+      "resources/**/*",
+      "package.json"
+    ],
+    "mac": {
+      "icon": "build/icon.icns",
+      "hardenedRuntime": false,
+      "extendInfo": {
+        "NSCameraUsageDescription": "Photo Booth needs camera access to take photos."
+      },
+      "target": [
+        {
+          "target": "zip",
+          "arch": ["arm64"]
+        }
+      ]
+    },
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        {
+          "target": "zip",
+          "arch": ["x64"]
+        }
+      ]
+    },
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://indie.lunastudio.cn/photo_booth/api/updates/",
+        "useMultipleRangeRequest": false
+      }
+    ]
+  }
+}

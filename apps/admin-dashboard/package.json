@@ -1,0 +1,27 @@
+{
+  "name": "@lunastudio/admin-dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "max dev",
+    "build": "max build",
+    "postinstall": "max setup",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ant-design/icons": "^5.5.1",
+    "@ant-design/pro-components": "^2.8.2",
+    "@aws-sdk/client-s3": "^3.1081.0",
+    "@aws-sdk/lib-storage": "^3.1081.0",
+    "@umijs/max": "^4.4.0",
+    "antd": "^5.22.2",
+    "cos-js-sdk-v5": "^1.10.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "typescript": "^5.6.3"
+  }
+}

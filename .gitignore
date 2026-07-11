@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+out/
+build/
+*.tsbuildinfo
+!apps/kiosk-client/build/
+!apps/kiosk-client/build/icon.icns
+!apps/kiosk-client/build/icon.ico
+
+# Electron
+apps/kiosk-client/release/
+apps/kiosk-client/dist-electron/
+
+# Local runtime data (offline queue, captured photos, uploaded files)
+apps/kiosk-client/.kiosk-data/
+apps/kiosk-client/.local-signing/
+apps/cloud-server/.uploads/
+apps/cloud-server/prisma/*.db
+apps/cloud-server/prisma/*.db-journal
+apps/cloud-server/dev.db*
+
+# Env
+.env
+.env.local
+*.local
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+scripts
+apps/admin-dashboard/src/.umi*

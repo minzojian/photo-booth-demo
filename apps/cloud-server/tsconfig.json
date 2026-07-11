@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "./src",
+    "outDir": "./dist",
+    "types": ["node"],
+    "noUnusedLocals": false
+  },
+  "include": ["src/**/*"],
+  "exclude": ["src/storage/aws-s3.ts"]
+}

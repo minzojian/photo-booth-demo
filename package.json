@@ -1,0 +1,22 @@
+{
+  "name": "photo-booth-demo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "大头贴自助终端 Demo（聚焦版）：Electron 前台(拍照/断点续传) + Ant Design Pro 中台(设备/订单/管理员) + Fastify/Prisma 服务端(COS STS 签发)。",
+  "author": "kent",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev:server": "pnpm --filter @lunastudio/cloud-server dev",
+    "dev:kiosk": "pnpm --filter @lunastudio/kiosk-client dev",
+    "dev:admin": "pnpm --filter @lunastudio/admin-dashboard dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "db:setup": "pnpm --filter @lunastudio/cloud-server db:setup"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  }
+}
