@@ -42,17 +42,19 @@ function generateBlockmapNative(zipPath, blockmapPath) {
   // 根据平台选择 binary，调用 `blockmap --input <file> --output <output>`
   const binDir = path.dirname(appBuilderIndex);
   const platform = process.platform === 'darwin' ? 'mac' : process.platform === 'win32' ? 'win' : 'linux';
-  const arch = process.arch === 'arm64' ? 'arm64' : process.arch === 'x64' ? 'amd64' : process.arch;
-  // app-builder-bin 的命名规则：<platform>/app-builder_<arch>
-  const exeName = platform === 'win' ? 'app-builder.exe' : 'app-builder';
-  const exePath = path.join(binDir, platform, `app-builder_${arch}`);
-  const altPath = path.join(binDir, platform, exeName);
-  const finalPath = existsSync(exePath) ? exePath : (existsSync(altPath) ? altPath : null);
-  if (!finalPath) {
-    console.warn('[rename-with-hash] app-builder binary not found for', platform, arch);
+  const nodeArch = process.arch; // x64, arm64, ia32
+  const binaryName = platform === 'win' ? 'app-builder.exe' : 'app-builder';
+  // Windows: win/x64/app-builder.exe, macOS: mac/app-builder_amd64
+  const archDir = platform === 'win' || platform === 'linux' ? nodeArch : '';
+  const archSuffix = platform === 'mac' ? `_${nodeArch === 'x64' ? 'amd64' : nodeArch}` : '';
+  const binaryPath = archDir
+    ? path.join(binDir, platform, archDir, binaryName)
+    : path.join(binDir, platform, `${binaryName}${archSuffix}`);
+  if (!existsSync(binaryPath)) {
+    console.warn('[rename-with-hash] app-builder binary not found for', platform, nodeArch);
     return;
   }
-  const result = spawnSync(finalPath, ['blockmap', '--input', zipPath, '--output', blockmapPath], { stdio: 'pipe', encoding: 'utf8' });
+  const result = spawnSync(binaryPath, ['blockmap', '--input', zipPath, '--output', blockmapPath], { stdio: 'pipe', encoding: 'utf8' });
   if (result.status !== 0) {
     console.warn('[rename-with-hash] app-builder blockmap failed:', result.stderr || result.stdout);
     return;
