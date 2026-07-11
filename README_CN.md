@@ -95,7 +95,8 @@ photo_booth_demo/
 
 | 平台 | 架构 | 版本 | 下载 |
 |------|------|------|------|
-| macOS | ARM64 (Apple Silicon) | 1.0.0 | [PhotoBoothKiosk-1.0.0-arm64-mac.zip](https://static.lunastudio.cn/projects/photo_booth/updates/PhotoBoothKiosk-1.0.0-arm64-mac-f52ff069.zip) |
+| macOS | ARM64 (Apple Silicon) | 1.0.0 | [PhotoBoothKiosk-1.0.0-arm64-mac.zip](https://static.lunastudio.cn/projects/photo_booth/updates/PhotoBoothKiosk-1.0.0-arm64-mac-30bba76a.zip) |
+| Windows | x64 (Intel/AMD) | 1.0.0 | [PhotoBoothKiosk-1.0.0-win.zip](https://static.lunastudio.cn/projects/photo_booth/updates/PhotoBoothKiosk-1.0.0-win-80cb814f.zip) |
 
 ## 核心技术
 

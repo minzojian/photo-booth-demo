@@ -22,8 +22,8 @@ interface ReleaseRow {
 }
 
 const PLATFORM_LABELS: Record<string, string> = {
-  darwin: 'macOS',
   win32: 'Windows',
+  darwin: 'macOS',
 }
 const ARCH_LABELS: Record<string, string> = { arm64: 'ARM64 (Apple Silicon)', x64: 'x64 (Intel/AMD)' }
 const PLATFORM_ARCHS: Record<string, string[]> = {
@@ -53,7 +53,7 @@ export default function Releases() {
   const [editForm] = Form.useForm()
   const [form] = Form.useForm()
   const tableRef = useRef<{ reload: () => void }>(null)
-  const selectedPlatform: string = Form.useWatch('platform', form) || 'darwin'
+  const selectedPlatform: string = Form.useWatch('platform', form) || 'win32'
   const availableArchs = PLATFORM_ARCHS[selectedPlatform] || Object.keys(ARCH_LABELS)
 
   // 切换平台时自动切到该平台第一个可用架构
@@ -288,7 +288,7 @@ export default function Releases() {
             name="platform"
             label={intl.formatMessage({ id: 'releases.platform' })}
             rules={[{ required: true }]}
-            initialValue="darwin">
+            initialValue="win32">
             <Select
               options={Object.entries(PLATFORM_LABELS).map(([k, v]) => ({ value: k, label: v }))}
               onChange={handlePlatformChange}
@@ -298,7 +298,7 @@ export default function Releases() {
             name="arch"
             label={intl.formatMessage({ id: 'releases.arch' })}
             rules={[{ required: true }]}
-            initialValue="arm64">
+            initialValue="x64">
             <Select
               options={availableArchs.map((k) => ({ value: k, label: ARCH_LABELS[k] || k }))}
             />

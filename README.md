@@ -94,7 +94,8 @@ photo_booth_demo/
 
 | Platform | Arch | Version | Download |
 |----------|------|---------|----------|
-| macOS | ARM64 (Apple Silicon) | 1.0.0 | [PhotoBoothKiosk-1.0.0-arm64-mac.zip](https://static.lunastudio.cn/projects/photo_booth/updates/PhotoBoothKiosk-1.0.0-arm64-mac-f52ff069.zip) |
+| macOS | ARM64 (Apple Silicon) | 1.0.0 | [PhotoBoothKiosk-1.0.0-arm64-mac.zip](https://static.lunastudio.cn/projects/photo_booth/updates/PhotoBoothKiosk-1.0.0-arm64-mac-30bba76a.zip) |
+| Windows | x64 (Intel/AMD) | 1.0.0 | [PhotoBoothKiosk-1.0.0-win.zip](https://static.lunastudio.cn/projects/photo_booth/updates/PhotoBoothKiosk-1.0.0-win-80cb814f.zip) |
 
 ## Tech Stack
 
