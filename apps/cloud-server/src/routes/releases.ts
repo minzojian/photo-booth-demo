@@ -47,6 +47,16 @@ export async function releaseRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(201).send(rows[0]);
   });
 
+  app.patch('/releases/:id', { preHandler: requireAuth }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const parsed = z.object({ releaseNotes: z.string().min(1).optional() }).safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'invalid_body' });
+    const rows = await db.select().from(releases).where(eq(releases.id, id)).limit(1);
+    if (!rows[0]) return reply.code(404).send({ error: 'not_found' });
+    await db.update(releases).set(parsed.data).where(eq(releases.id, id));
+    return reply.send({ ...rows[0], ...parsed.data });
+  });
+
   app.delete('/releases/:id', { preHandler: requireAuth }, async (req, reply) => {
     const { id } = req.params as { id: string };
     await db.delete(releases).where(eq(releases.id, id));

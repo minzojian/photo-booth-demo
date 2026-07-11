@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
 import { ProTable, type ProColumns } from '@ant-design/pro-components'
-import { Button, Modal, Form, Input, Select, Upload, message, Popconfirm, Switch, Typography } from 'antd'
+import { Button, Modal, Form, Input, Select, Upload, message, Popconfirm, Switch, Typography, Space } from 'antd'
 import { UploadOutlined, CloudUploadOutlined, CopyOutlined } from '@ant-design/icons'
 import { useIntl } from '@umijs/max'
 import { apiGet, apiSend } from '@/services/api'
@@ -24,9 +24,12 @@ interface ReleaseRow {
 const PLATFORM_LABELS: Record<string, string> = {
   darwin: 'macOS',
   win32: 'Windows',
-  linux: 'Linux',
 }
 const ARCH_LABELS: Record<string, string> = { arm64: 'ARM64 (Apple Silicon)', x64: 'x64 (Intel/AMD)' }
+const PLATFORM_ARCHS: Record<string, string[]> = {
+  darwin: ['arm64'],
+  win32: ['x64'],
+}
 
 /** 使用 Web Crypto API 计算文件 SHA-512（electron-updater 需要 base64） */
 async function sha512Base64(file: File): Promise<string> {
@@ -45,8 +48,21 @@ export default function Releases() {
   const [pctBm, setPctBm] = useState(0)
   const [zipFile, setZipFile] = useState<File | null>(null)
   const [bmFile, setBmFile] = useState<File | null>(null)
+  const [editOpen, setEditOpen] = useState(false)
+  const [editRow, setEditRow] = useState<ReleaseRow | null>(null)
+  const [editForm] = Form.useForm()
   const [form] = Form.useForm()
   const tableRef = useRef<{ reload: () => void }>(null)
+  const selectedPlatform: string = Form.useWatch('platform', form) || 'darwin'
+  const availableArchs = PLATFORM_ARCHS[selectedPlatform] || Object.keys(ARCH_LABELS)
+
+  // 切换平台时自动切到该平台第一个可用架构
+  const handlePlatformChange = (platform: string) => {
+    const archs = PLATFORM_ARCHS[platform]
+    if (archs && archs.length > 0) {
+      form.setFieldValue('arch', archs[0])
+    }
+  }
 
   const resetModal = () => {
     form.resetFields()
@@ -144,11 +160,16 @@ export default function Releases() {
     },
     {
       title: intl.formatMessage({ id: 'releases.actions' }),
-      width: 80,
+      width: 120,
       render: (_, r) => (
-        <Popconfirm title={intl.formatMessage({ id: 'releases.delete.confirm' })} onConfirm={() => handleDelete(r.id)}>
-          <a style={{ color: '#ff4d4f' }}>{intl.formatMessage({ id: 'releases.delete' })}</a>
-        </Popconfirm>
+        <Space>
+          <a onClick={() => { setEditRow(r); editForm.setFieldsValue({ releaseNotes: r.releaseNotes || '' }); setEditOpen(true) }}>
+            {intl.formatMessage({ id: 'releases.edit' })}
+          </a>
+          <Popconfirm title={intl.formatMessage({ id: 'releases.delete.confirm' })} onConfirm={() => handleDelete(r.id)}>
+            <a style={{ color: '#ff4d4f' }}>{intl.formatMessage({ id: 'releases.delete' })}</a>
+          </Popconfirm>
+        </Space>
       ),
     },
   ]
@@ -162,6 +183,15 @@ export default function Releases() {
   const handleToggle = async (row: ReleaseRow) => {
     await apiSend('PATCH', `/releases/${row.id}/toggle`)
     message.success(intl.formatMessage({ id: 'releases.toggle.success' }))
+    tableRef.current?.reload()
+  }
+
+  const handleEdit = async () => {
+    if (!editRow) return
+    const values = await editForm.validateFields()
+    await apiSend('PATCH', `/releases/${editRow.id}`, values)
+    message.success(intl.formatMessage({ id: 'releases.edit.success' }))
+    setEditOpen(false)
     tableRef.current?.reload()
   }
 
@@ -259,14 +289,19 @@ export default function Releases() {
             label={intl.formatMessage({ id: 'releases.platform' })}
             rules={[{ required: true }]}
             initialValue="darwin">
-            <Select options={Object.entries(PLATFORM_LABELS).map(([k, v]) => ({ value: k, label: v }))} />
+            <Select
+              options={Object.entries(PLATFORM_LABELS).map(([k, v]) => ({ value: k, label: v }))}
+              onChange={handlePlatformChange}
+            />
           </Form.Item>
           <Form.Item
             name="arch"
             label={intl.formatMessage({ id: 'releases.arch' })}
             rules={[{ required: true }]}
             initialValue="arm64">
-            <Select options={Object.entries(ARCH_LABELS).map(([k, v]) => ({ value: k, label: v }))} />
+            <Select
+              options={availableArchs.map((k) => ({ value: k, label: ARCH_LABELS[k] || k }))}
+            />
           </Form.Item>
           <div style={{ marginBottom: 24 }}>
             <div style={{ marginBottom: 8, color: 'rgba(0,0,0,.88)', fontSize: 14 }}>
@@ -315,6 +350,20 @@ export default function Releases() {
               {pctBm > 0 && ` · blockmap ${pctBm}%`}
             </div>
           )}
+        </Form>
+      </Modal>
+
+      <Modal
+        title={intl.formatMessage({ id: 'releases.edit.title' })}
+        open={editOpen}
+        onCancel={() => setEditOpen(false)}
+        onOk={handleEdit}
+        okText={intl.formatMessage({ id: 'releases.edit.submit' })}
+        width={480}>
+        <Form form={editForm} layout="vertical" style={{ marginTop: 16 }}>
+          <Form.Item name="releaseNotes" label={intl.formatMessage({ id: 'releases.releaseNotes' })} rules={[{ required: true, message: '请填写更新日志' }]}>
+            <Input.TextArea rows={4} placeholder={intl.formatMessage({ id: 'releases.releaseNotes.placeholder' })} />
+          </Form.Item>
         </Form>
       </Modal>
     </>
