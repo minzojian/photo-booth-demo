@@ -8,7 +8,11 @@ const RELEASE_DIR = path.join(__dirname, '..', 'release');
 
 /** 找到 app-builder 原生二进制路径，用于生成 blockmap */
 function findAppBuilder() {
-  // app-builder-bin 是 app-builder-lib 的依赖，后者是 electron-builder 的依赖
+  // 优先直接 require（hoisted / flat node_modules）
+  try {
+    return require.resolve('app-builder-bin');
+  } catch { /* fallback to pnpm virtual store */ }
+  // pnpm 严格模式：在 .pnpm 虚拟仓库中查找
   const candidates = [
     path.join(__dirname, '..', '..', '..', 'node_modules', '.pnpm'),
   ];
@@ -19,10 +23,8 @@ function findAppBuilder() {
     if (!binDir) continue;
     const p = path.join(base, binDir, 'node_modules', 'app-builder-bin');
     if (!existsSync(p)) continue;
-    // 返回 index.js（app-builder-lib 用这个来选择平台特定二进制）
     try {
-      const idx = require.resolve(p);
-      return idx;
+      return require.resolve(p);
     } catch { continue; }
   }
   return null;
