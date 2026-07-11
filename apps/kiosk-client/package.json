@@ -1,6 +1,6 @@
 {
   "name": "@lunastudio/kiosk-client",
-  "version": "1.0.1",
+  "version": "1.0.0",
   "private": true,
   "main": "out/main/index.js",
   "scripts": {
@@ -70,10 +70,15 @@
       "icon": "build/icon.ico",
       "target": [
         {
-          "target": "zip",
+          "target": "nsis",
           "arch": ["x64"]
         }
       ]
+    },
+    "nsis": {
+      "artifactName": "${productName}-${version}-win-${arch}.${ext}",
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
     },
     "publish": [
       {

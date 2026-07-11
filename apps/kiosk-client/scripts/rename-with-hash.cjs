@@ -42,11 +42,14 @@ function renameZip(zipPath, options = {}) {
   const base = path.basename(zipPath);
 
   // PhotoBoothKiosk-1.0.2-arm64-mac.zip → PhotoBoothKiosk-1.0.2-arm64-mac-{hash}.zip
-  const m = base.match(/-(?<version>\d+\.\d+\.\d+)-(?<archOs>.+)\.zip$/);
+  // PhotoBoothKiosk-1.0.2-win-x64.exe  → PhotoBoothKiosk-1.0.2-win-x64-{hash}.exe
+  const m = base.match(/-(?<version>\d+\.\d+\.\d+)-(?<archOs>.+)\.(zip|exe)$/);
   if (!m) { console.log('[rename-with-hash] skip (cannot parse version):', base); return; }
 
+  const ext = path.extname(zipPath); // .zip or .exe
+
   const hash = crypto.createHash('md5').update(readFileSync(zipPath)).digest('hex').slice(0, 8);
-  const newBase = `${PRODUCT}-${m.groups.version}-${m.groups.archOs}-${hash}.zip`;
+  const newBase = `${PRODUCT}-${m.groups.version}-${m.groups.archOs}-${hash}${ext}`;
   const newZipPath = path.join(outDir, newBase);
   const newBlockmapBase = `${newBase}.blockmap`;
   if (base === newBase) { console.log('[rename-with-hash] skip (already renamed):', base); return; }
@@ -77,28 +80,29 @@ function renameZip(zipPath, options = {}) {
 
 function pickCliTargets(versionArg) {
   const files = readdirSync(RELEASE_DIR);
-  const unhashedZips = files.filter((f) =>
+  const unhashed = files.filter((f) =>
     f.startsWith(PRODUCT)
-    && f.endsWith('.zip')
+    && (f.endsWith('.zip') || f.endsWith('.exe'))
     && !f.endsWith('.zip.blockmap')
-    && !/-\w{8}\.zip$/.test(f),
+    && !f.endsWith('.exe.blockmap')
+    && !/-\w{8}\.(zip|exe)$/.test(f),
   );
 
   if (versionArg) {
-    return unhashedZips.filter((f) => parseVersionFromName(f) === versionArg);
+    return unhashed.filter((f) => parseVersionFromName(f) === versionArg);
   }
 
-  // 默认只处理当前 yml 指向的目标 zip，避免误处理历史遗留的未重命名 zip。
+  // 默认只处理当前 yml 指向的目标，避免误处理历史遗留的未重命名文件。
   const ymlCandidates = ['latest-mac.yml', 'latest.yml'];
   for (const ymlName of ymlCandidates) {
     const ymlPath = path.join(RELEASE_DIR, ymlName);
     const p = parsePathFromYml(ymlPath);
     if (!p) continue;
     const base = path.basename(p);
-    if (unhashedZips.includes(base)) return [base];
+    if (unhashed.includes(base)) return [base];
   }
 
-  return unhashedZips;
+  return unhashed;
 }
 
 // 直接调用模式（npm script 串联）
@@ -113,8 +117,12 @@ if (require.main === module) {
 } else {
   // electron-builder hook 模式
   exports.default = async function renameWithHash(buildResult) {
-    const zipPaths = (buildResult.artifactPaths || []).filter(p => p.endsWith('.zip') && !p.endsWith('.zip.blockmap'));
-    for (const p of zipPaths) renameZip(p);
+    const artifactPaths = (buildResult.artifactPaths || []).filter(p =>
+      (p.endsWith('.zip') || p.endsWith('.exe')) &&
+      !p.endsWith('.zip.blockmap') &&
+      !p.endsWith('.exe.blockmap')
+    );
+    for (const p of artifactPaths) renameZip(p);
   };
 }
 
