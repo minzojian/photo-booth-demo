@@ -1,24 +1,61 @@
 const { renameSync, readFileSync, writeFileSync, readdirSync, unlinkSync, existsSync } = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const { spawnSync } = require('node:child_process');
 
 const PRODUCT = 'PhotoBoothKiosk';
 const RELEASE_DIR = path.join(__dirname, '..', 'release');
-const BLOCK_SIZE = 64 * 1024; // 64 KB per block
 
-/** 为文件生成 electron-updater blockmap（SHA-512 per 64KB chunk → base64） */
-function generateBlockmap(filePath, blockmapPath) {
-  if (existsSync(blockmapPath)) return; // already exists
-  const buf = readFileSync(filePath);
-  const blocks = [];
-  for (let offset = 0; offset < buf.length; offset += BLOCK_SIZE) {
-    const end = Math.min(offset + BLOCK_SIZE, buf.length);
-    const chunk = buf.subarray(offset, end);
-    const hash = crypto.createHash('sha512').update(chunk).digest('base64');
-    blocks.push({ size: end - offset, sha512: hash });
+/** 找到 app-builder 原生二进制路径，用于生成 blockmap */
+function findAppBuilder() {
+  // app-builder-bin 是 app-builder-lib 的依赖，后者是 electron-builder 的依赖
+  const candidates = [
+    path.join(__dirname, '..', '..', '..', 'node_modules', '.pnpm'),
+  ];
+  for (const base of candidates) {
+    if (!existsSync(base)) continue;
+    const dirs = readdirSync(base);
+    const binDir = dirs.find((d) => d.startsWith('app-builder-bin@'));
+    if (!binDir) continue;
+    const p = path.join(base, binDir, 'node_modules', 'app-builder-bin');
+    if (!existsSync(p)) continue;
+    // 返回 index.js（app-builder-lib 用这个来选择平台特定二进制）
+    try {
+      const idx = require.resolve(p);
+      return idx;
+    } catch { continue; }
   }
-  writeFileSync(blockmapPath, JSON.stringify(blocks));
-  console.log('[rename-with-hash] blockmap generated:', path.basename(blockmapPath), `(${blocks.length} blocks)`);
+  return null;
+}
+
+/** 调用原生 app-builder 生成 blockmap（与 electron-builder 格式完全一致） */
+function generateBlockmapNative(zipPath, blockmapPath) {
+  if (existsSync(blockmapPath)) return;
+  const appBuilderIndex = findAppBuilder();
+  if (!appBuilderIndex) {
+    console.warn('[rename-with-hash] app-builder binary not found, skip blockmap');
+    return;
+  }
+  // app-builder-lib 的 executeAppBuilderAsJson 内部逻辑：
+  // 根据平台选择 binary，调用 `blockmap --input <file> --output <output>`
+  const binDir = path.dirname(appBuilderIndex);
+  const platform = process.platform === 'darwin' ? 'mac' : process.platform === 'win32' ? 'win' : 'linux';
+  const arch = process.arch === 'arm64' ? 'arm64' : process.arch === 'x64' ? 'amd64' : process.arch;
+  // app-builder-bin 的命名规则：<platform>/app-builder_<arch>
+  const exeName = platform === 'win' ? 'app-builder.exe' : 'app-builder';
+  const exePath = path.join(binDir, platform, `app-builder_${arch}`);
+  const altPath = path.join(binDir, platform, exeName);
+  const finalPath = existsSync(exePath) ? exePath : (existsSync(altPath) ? altPath : null);
+  if (!finalPath) {
+    console.warn('[rename-with-hash] app-builder binary not found for', platform, arch);
+    return;
+  }
+  const result = spawnSync(finalPath, ['blockmap', '--input', zipPath, '--output', blockmapPath], { stdio: 'pipe', encoding: 'utf8' });
+  if (result.status !== 0) {
+    console.warn('[rename-with-hash] app-builder blockmap failed:', result.stderr || result.stdout);
+    return;
+  }
+  console.log('[rename-with-hash] blockmap generated:', path.basename(blockmapPath));
 }
 
 function parseVersionFromName(name) {
@@ -82,9 +119,9 @@ function renameZip(zipPath, options = {}) {
   const newBlockmap = newZipPath + '.blockmap';
   try { renameSync(oldBlockmap, newBlockmap); console.log('[rename-with-hash] blockmap renamed'); } catch { /* no blockmap */ }
 
-  // 如果 electron-builder 没生成 blockmap（如 Windows zip 目标），自己生成
+  // 如果 electron-builder 没生成 blockmap（如 Windows zip 目标），用原生 app-builder 生成
   if (!existsSync(newBlockmap)) {
-    try { generateBlockmap(newZipPath, newBlockmap); } catch (e) { console.warn('[rename-with-hash] blockmap generation failed:', e.message); }
+    try { generateBlockmapNative(newZipPath, newBlockmap); } catch (e) { console.warn('[rename-with-hash] blockmap generation failed:', e.message); }
   }
 
   for (const ymlName of ['latest-mac.yml', 'latest.yml']) {
