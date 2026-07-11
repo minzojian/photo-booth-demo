@@ -48,8 +48,8 @@ jobs:
         working-directory: apps/kiosk-client
         run: |
           pnpm run build
-          npx electron-builder --mac --arm64 --publish never -c.npmRebuild=true
-          node scripts/rename-with-hash.cjs --version=$(node -p "require('./package.json').version")
+          ELECTRON_VER=$(node -p "require('electron/package.json').version")
+          npx electron-builder --mac --arm64 --publish never -c.electronVersion="$ELECTRON_VER" && node scripts/rename-with-hash.cjs --version=$(node -p "require('./package.json').version")
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -90,8 +90,7 @@ jobs:
         working-directory: apps/kiosk-client
         run: |
           pnpm run build
-          npx electron-builder --win --x64 --publish never -c.npmRebuild=true
-          node scripts/rename-with-hash.cjs --version=$(node -p "require('./package.json').version")
+          npx electron-builder --win --x64 --publish never && node scripts/rename-with-hash.cjs --version=$(node -p "require('./package.json').version")
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
