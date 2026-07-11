@@ -6,6 +6,7 @@ import { useIntl } from '@umijs/max';
 import { apiGet, apiSend } from '@/services/api';
 import { getUploader } from '@/uploader';
 import type { UploadCredentials } from '@/uploader';
+import type { FormInstance } from 'antd';
 
 interface ReleaseRow {
   id: string;
@@ -47,6 +48,8 @@ export default function Releases() {
   const [bmFile, setBmFile] = useState<File | null>(null);
   const [form] = Form.useForm();
   const tableRef = useRef<{ reload: () => void }>(null);
+  const selectedPlatform: string = Form.useWatch('platform', form) || 'darwin';
+  const showBlockmap = selectedPlatform === 'darwin';
 
   const resetModal = () => {
     form.resetFields();
@@ -266,6 +269,7 @@ export default function Releases() {
               <Button icon={<UploadOutlined />} disabled={uploading}>{intl.formatMessage({ id: 'releases.upload.zip' })}</Button>
             </Upload>
           </div>
+          {showBlockmap && (
           <div style={{ marginBottom: 24 }}>
             <div style={{ marginBottom: 8, color: 'rgba(0,0,0,.88)', fontSize: 14 }}>{intl.formatMessage({ id: 'releases.upload.blockmap' })}</div>
             <Upload
@@ -280,6 +284,7 @@ export default function Releases() {
               <Button icon={<UploadOutlined />} disabled={uploading}>{intl.formatMessage({ id: 'releases.upload.blockmap' })}</Button>
             </Upload>
           </div>
+          )}
           <Form.Item name="releaseNotes" label={intl.formatMessage({ id: 'releases.releaseNotes' })} rules={[{ required: true, message: '请填写更新日志' }]}>
             <Input.TextArea rows={3} placeholder={intl.formatMessage({ id: 'releases.releaseNotes.placeholder' })} />
           </Form.Item>
