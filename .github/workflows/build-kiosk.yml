@@ -1,0 +1,104 @@
+name: Build Kiosk Client
+
+# =============================================================================
+# 构建 Electron 桌面端（macOS ARM64 + Windows x64）
+# Build Electron kiosk client for macOS ARM64 & Windows x64
+# =============================================================================
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/kiosk-client/**'
+      - 'packages/shared/**'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/build-kiosk.yml'
+  workflow_dispatch:
+
+env:
+  CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+jobs:
+  # ── macOS ARM64 (Apple Silicon) ──────────────────────────────────────────
+  build-mac:
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Rebuild native modules
+        working-directory: apps/kiosk-client
+        run: pnpm rebuild:native
+
+      - name: Build & Package (macOS ARM64)
+        working-directory: apps/kiosk-client
+        run: |
+          pnpm run build
+          npx electron-builder --mac --arm64 --publish never -c.npmRebuild=true
+          node scripts/rename-with-hash.cjs --version=$(node -p "require('./package.json').version")
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: kiosk-macos-arm64
+          path: |
+            apps/kiosk-client/release/*.zip
+            apps/kiosk-client/release/*.blockmap
+            apps/kiosk-client/release/*.yml
+          if-no-files-found: error
+
+  # ── Windows x64 ─────────────────────────────────────────────────────────
+  build-win:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Rebuild native modules
+        working-directory: apps/kiosk-client
+        run: pnpm rebuild:native
+
+      - name: Build & Package (Windows x64)
+        working-directory: apps/kiosk-client
+        run: |
+          pnpm run build
+          npx electron-builder --win --x64 --publish never -c.npmRebuild=true
+          node scripts/rename-with-hash.cjs --version=$(node -p "require('./package.json').version")
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: kiosk-windows-x64
+          path: |
+            apps/kiosk-client/release/*.zip
+            apps/kiosk-client/release/*.blockmap
+            apps/kiosk-client/release/*.yml
+          if-no-files-found: error
