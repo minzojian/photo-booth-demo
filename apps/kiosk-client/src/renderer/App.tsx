@@ -1339,10 +1339,10 @@ export default function App() {
                     <div style={{ color: '#6b7280', fontSize: 14, marginBottom: 12 }}>{t('printer.empty')}</div>
                   )}
                   {printers.map((p, i) => {
-                    // macOS Printer Simulator 等虚拟打印机会返回非 0/1/2 的状态码（如 3=idle），
-                    // 只有 2 表示真正不可用
-                    const isUnavailable = p.status === 2
-                    const isActive = p.status === 1
+                    // 优先用 lpstat 精确状态；Electron 原生码只作兜底
+                    const ds = p.detailedStatus
+                    const isUnavailable = ds === 'unavailable' || (ds == null && p.status === 2)
+                    const isActive = ds === 'active' || (ds == null && p.status === 1)
                     const statusLabel = isUnavailable ? t('printer.status.unavailable')
                       : isActive ? t('printer.status.active')
                       : t('printer.status.idle')

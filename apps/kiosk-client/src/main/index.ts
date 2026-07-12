@@ -209,10 +209,33 @@ app.whenReady().then(async () => {
     return settings;
   });
 
-  // 打印机
-  ipcMain.handle('printer:list', () => win?.webContents.getPrintersAsync() ?? []);
+  // 打印机 — Electron 的 getPrintersAsync 状态码太粗，macOS 用 lpstat 增强
+  const getDetailedStatus = (printerName: string): string | null => {
+    if (process.platform !== 'darwin') return null
+    try {
+      const r = spawnSync('lpstat', ['-p', printerName], { encoding: 'utf8', timeout: 3000 })
+      const out = r.stdout || ''
+      // CUPS 典型输出: "printer Foo is idle.  enabled since ..."
+      //               "printer Foo disabled since ... - reason"
+      //               "printer Foo is idle.  accepting requests ..."
+      if (out.includes('disabled') || out.includes('rejecting')) return 'unavailable'
+      if (out.includes('idle') || out.includes('ready')) return 'idle'
+      if (out.includes('processing') || out.includes('printing')) return 'active'
+      return out.trim() ? 'idle' : null // 有输出但无法归类当作 idle
+    } catch { return null }
+  }
+
+  ipcMain.handle('printer:list', () => {
+    const list = (win?.webContents.getPrintersAsync() ?? []).then(async (raw) => {
+      return Promise.all(raw.map(async (p) => {
+        const detailed = getDetailedStatus(p.name)
+        return { ...p, detailedStatus: detailed }
+      }))
+    })
+    return list
+  })
   ipcMain.handle('printer:test', () => {
-    win?.webContents.print({ silent: false, printBackground: true }, () => {});
+    win?.webContents.print({ silent: false, printBackground: true }, () => {})
   });
 
   // 定时清理过期照片（启动时 + 每 6 小时）

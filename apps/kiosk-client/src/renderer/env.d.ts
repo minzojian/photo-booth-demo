@@ -30,8 +30,9 @@ export interface PrinterInfo {
   name: string;
   displayName: string;
   description: string;
-  status: number; // 0=idle, 1=active, 2=unavailable
+  status: number;
   isDefault: boolean;
+  detailedStatus?: string | null; // lpstat 精确状态: 'idle' | 'active' | 'unavailable' | null
 }
 
 declare global {
