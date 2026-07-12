@@ -327,7 +327,8 @@ app.whenReady().then(async () => {
   ipcMain.handle('printer:printFile', async (_e, filePath: string, printerName: string) => {
     if (process.platform === 'darwin') {
       return new Promise<{ ok: boolean; error?: string }>((resolve) => {
-        const child = spawnSync('lp', ['-d', printerName, filePath], { encoding: 'utf8', timeout: 30000 })
+        // -o scaling=100 无边距，不缩放
+        const child = spawnSync('lp', ['-d', printerName, '-o', 'scaling=100', filePath], { encoding: 'utf8', timeout: 30000 })
         resolve({ ok: child.status === 0, error: child.stderr || undefined })
       })
     }
