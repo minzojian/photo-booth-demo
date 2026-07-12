@@ -210,24 +210,22 @@ app.whenReady().then(async () => {
     return settings;
   });
 
-  // macOS 打印机状态 — 强制 LC_ALL=C 保证英文输出 + TCP 网络检测
-  const C_ENV = { ...process.env, LC_ALL: 'C' }
+  // macOS 打印机状态 — 强制英文输出 + 直连 TCP 检测
   const getDetailedStatus = (printerName: string): string => {
     if (process.platform !== 'darwin') return 'idle'
     try {
-      const r1 = spawnSync('lpstat', ['-p', printerName], { encoding: 'utf8', timeout: 3000, env: C_ENV })
-      const out1 = (r1.stdout || '') + (r1.stderr || '')
-      const r2 = spawnSync('lpstat', ['-a', printerName], { encoding: 'utf8', timeout: 3000, env: C_ENV })
-      const out2 = (r2.stdout || '')
-      const full = out1 + out2
+      // env LC_ALL=C 作为命令前缀确保英文输出
+      const run = (args: string[]) => {
+        const r = spawnSync('env', ['LC_ALL=C', 'lpstat', ...args], { encoding: 'utf8', timeout: 3000 })
+        return (r.stdout || '') + (r.stderr || '')
+      }
+      const full = run(['-p', printerName]) + run(['-a', printerName])
       console.log('[cups]', printerName, 'lpstat:', full.trim().replace(/\n/g, ' | '))
       if (/disabled|rejecting|not accepting/i.test(full)) return 'unavailable'
       if (/processing|printing/i.test(full)) return 'active'
 
-      // 对直连 URI（非 Bonjour）做 TCP 检测
-      const r3 = spawnSync('lpstat', ['-v', printerName], { encoding: 'utf8', timeout: 3000, env: C_ENV })
-      const devUri = (r3.stdout || '').trim()
-      // socket://1.2.3.4:9100 或 ipp://192.168.1.1/ 或 ipps://printer.local/
+      // 直连 URI（非 dnssd://Bonjour）做 TCP 检测
+      const devUri = run(['-v', printerName]).trim()
       const directMatch = devUri.match(/(?:socket|ipp|ipps|lpd):\/\/([\w.-]+)(?::(\d+))?/i)
       if (directMatch) {
         const host = directMatch[1]
@@ -239,7 +237,6 @@ app.whenReady().then(async () => {
         }
         console.log('[cups]', printerName, '→ idle (TCP ok)')
       } else {
-        // dnssd:// Bonjour 地址跳过 TCP，信任 lpstat
         console.log('[cups]', printerName, '→ idle (Bonjour/trust)')
       }
       return 'idle'
