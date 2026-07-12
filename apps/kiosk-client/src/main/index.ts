@@ -2,6 +2,7 @@ import { writeFile, mkdir } from 'node:fs/promises';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { createHash, randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
+import { request as httpRequest } from 'node:http';
 import { app, BrowserWindow, ipcMain, globalShortcut } from 'electron';
 import { join } from 'node:path';
 import { TaskStore } from './db.js';
@@ -225,29 +226,90 @@ app.whenReady().then(async () => {
     } catch { return null }
   }
 
-  // macOS CUPS 查询耗材（墨水/碳粉、纸张）
-  const getSupplies = (printerName: string): { inkLevels: { name: string; pct: number }[]; paperLevel: number | null } | null => {
-    if (process.platform !== 'darwin') return null
-    try {
-      const r = spawnSync('lpoptions', ['-p', printerName, '-l'], { encoding: 'utf8', timeout: 3000 })
-      const out = r.stdout || ''
-      const ink: { name: string; pct: number }[] = []
-      for (const line of out.split('\n')) {
-        const m = line.match(/(marker|ink|toner).*?[-:]?\s*(\d+)/i)
-        if (m) ink.push({ name: m[1], pct: Math.min(100, Math.max(0, parseInt(m[2]))) })
+  // macOS CUPS IPP 查询耗材（墨水/碳粉、纸张）——通过 localhost:631
+  const getSupplies = (printerName: string): Promise<{ inkLevels: { name: string; pct: number }[]; paperLevel: number | null } | null> => {
+    return new Promise((resolve) => {
+      if (process.platform !== 'darwin') return resolve(null)
+      // 构造 IPP Get-Printer-Attributes 请求体
+      const printerUri = `ipp://localhost/printers/${encodeURIComponent(printerName)}`
+      const attrs = [
+        [0x47, 'attributes-charset', 'utf-8'],
+        [0x48, 'attributes-natural-language', 'en-us'],
+        [0x45, 'printer-uri', printerUri],
+        [0x44, 'requested-attributes', 'marker-colors'],
+        [0x44, 'requested-attributes', 'marker-levels'],
+        [0x44, 'requested-attributes', 'marker-names'],
+        [0x44, 'requested-attributes', 'marker-types'],
+      ]
+      const bodyParts: Buffer[] = []
+      // IPP version 2.0, operation Get-Printer-Attributes (0x000B), request-id 1
+      bodyParts.push(Buffer.from([0x02, 0x00, 0x00, 0x0B, 0x00, 0x00, 0x00, 0x01]))
+      bodyParts.push(Buffer.from([0x01])) // operation-attributes-tag
+      for (const [tag, name, value] of attrs) {
+        const nameB = Buffer.from(name, 'utf8')
+        const valB = Buffer.from(value, 'utf8')
+        bodyParts.push(Buffer.from([tag, 0x00, nameB.length])) // value-tag + name
+        bodyParts.push(nameB)
+        bodyParts.push(Buffer.from([0x00, valB.length])) // value length
+        bodyParts.push(valB)
       }
-      const paperM = out.match(/(paper|media).*?[-:]?\s*(\d+)/i)
-      const paper = paperM ? Math.min(100, Math.max(0, parseInt(paperM[2]))) : null
-      if (ink.length === 0 && paper == null) return null
-      return { inkLevels: ink, paperLevel: paper }
-    } catch { return null }
+      bodyParts.push(Buffer.from([0x03])) // end-of-attributes
+      const body = Buffer.concat(bodyParts)
+
+      const req = httpRequest({ hostname: '127.0.0.1', port: 631, path: `/printers/${encodeURIComponent(printerName)}`, method: 'POST', headers: { 'Content-Type': 'application/ipp', 'Content-Length': String(body.length) }, timeout: 3000 }, (res) => {
+        const chunks: Buffer[] = []
+        res.on('data', (c: Buffer) => chunks.push(c))
+        res.on('end', () => {
+          try {
+            const data = Buffer.concat(chunks)
+            const text = data.toString('utf8')
+            const ink: { name: string; pct: number }[] = []
+            // 解析 IPP 响应中的 marker-* 属性
+            const markerLevels = [...text.matchAll(/marker-levels[^]*?value.*?(\d+)/gi)]
+            const markerNames = [...text.matchAll(/marker-names[^]*?value.*?([a-zA-Z0-9\s]+?)(?=\x00|value)/gi)]
+            // 重新匹配：找到 marker-levels 后面的整数值
+            const levelRe = /marker-levels[\s\S]*?(\x21|\x22|\x23)(.{4})/g
+            // 简化：直接在二进制中搜 marker-levels 后面的 4 字节整数
+            const markerIdx = data.indexOf('marker-levels')
+            if (markerIdx >= 0) {
+              // IPP integer 格式: 0x21 (integer tag) + 2 bytes name-len + name + 2 bytes value-len + 4 bytes value
+              let pos = markerIdx + 'marker-levels'.length
+              // 跳过到 value 部分
+              while (pos < data.length - 6) {
+                if (data[pos] === 0x21 || data[pos] === 0x23) { // integer or enum
+                  const nameLen = data.readUInt16BE(pos + 1)
+                  pos += 3 + nameLen
+                  const valLen = data.readUInt16BE(pos)
+                  pos += 2
+                  if (valLen === 4) {
+                    const level = data.readInt32BE(pos)
+                    pos += 4
+                    ink.push({ name: `Ink ${ink.length + 1}`, pct: Math.min(100, Math.max(0, level)) })
+                  } else {
+                    pos += valLen
+                  }
+                } else {
+                  pos++
+                }
+                if (ink.length >= 8) break // 最多 8 个墨盒
+              }
+            }
+            resolve(ink.length > 0 ? { inkLevels: ink, paperLevel: null } : null)
+          } catch { resolve(null) }
+        })
+      })
+      req.on('error', () => resolve(null))
+      req.on('timeout', () => { req.destroy(); resolve(null) })
+      req.write(body)
+      req.end()
+    })
   }
 
   ipcMain.handle('printer:list', () => {
     const list = (win?.webContents.getPrintersAsync() ?? []).then(async (raw) => {
       return Promise.all(raw.map(async (p) => {
         const detailed = getDetailedStatus(p.name)
-        const supplies = getSupplies(p.name)
+        const supplies = await getSupplies(p.name)
         return { ...p, detailedStatus: detailed, supplies }
       }))
     })
