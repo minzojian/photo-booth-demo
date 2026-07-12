@@ -1339,7 +1339,10 @@ export default function App() {
                     <div style={{ color: '#6b7280', fontSize: 14, marginBottom: 12 }}>{t('printer.empty')}</div>
                   )}
                   {printers.map((p, i) => {
-                    const statusLabels: Record<number, string> = { 0: t('printer.status.idle'), 1: t('printer.status.active'), 2: t('printer.status.unavailable') }
+                    const statusLabel = p.status === 0 ? t('printer.status.idle')
+                      : p.status === 1 ? t('printer.status.active')
+                      : t('printer.status.unavailable')
+                    const statusColor = p.status === 0 ? '#4ade80' : p.status === 1 ? '#fbbf24' : '#f87171'
                     return (
                       <div key={i} style={{
                         background: 'rgba(255,255,255,.06)',
@@ -1358,8 +1361,8 @@ export default function App() {
                               <span style={{ marginLeft: 8, fontSize: 11, color: '#a78bfa' }}>[{t('printer.default')}]</span>
                             )}
                           </div>
-                          <div style={{ fontSize: 12, color: p.status === 0 ? '#4ade80' : p.status === 1 ? '#fbbf24' : '#f87171' }}>
-                            {statusLabels[p.status] ?? `Status ${p.status}`}
+                          <div style={{ fontSize: 12, color: statusColor }}>
+                            {statusLabel}
                           </div>
                         </div>
                       </div>
