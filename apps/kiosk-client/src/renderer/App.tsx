@@ -250,6 +250,7 @@ export default function App() {
     }
     setFrameIdx(0)
     setShots([])
+    setLastCapture(null) // 重置定格画面
     setStage('shoot')
     await startCameraOnly()
   }
