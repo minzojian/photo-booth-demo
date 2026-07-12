@@ -220,17 +220,27 @@ app.whenReady().then(async () => {
       const r2 = spawnSync('lpstat', ['-a', printerName], { encoding: 'utf8', timeout: 3000, env: C_ENV })
       const out2 = (r2.stdout || '')
       const full = out1 + out2
+      console.log('[cups]', printerName, 'lpstat:', full.trim().replace(/\n/g, ' | '))
       if (/disabled|rejecting|not accepting/i.test(full)) return 'unavailable'
       if (/processing|printing/i.test(full)) return 'active'
 
-      // 网络连通检测：lpstat -v → 提取主机 → TCP 连接
+      // 对直连 URI（非 Bonjour）做 TCP 检测
       const r3 = spawnSync('lpstat', ['-v', printerName], { encoding: 'utf8', timeout: 3000, env: C_ENV })
-      const hostMatch = (r3.stdout || '').match(/(?:socket|ipp|ipps|lpd|dnssd):\/\/[^/]*?@?([\w.-]+)(?::(\d+))?/i)
-      if (hostMatch) {
-        const host = hostMatch[1]
-        const port = parseInt(hostMatch[2] || '631')
+      const devUri = (r3.stdout || '').trim()
+      // socket://1.2.3.4:9100 或 ipp://192.168.1.1/ 或 ipps://printer.local/
+      const directMatch = devUri.match(/(?:socket|ipp|ipps|lpd):\/\/([\w.-]+)(?::(\d+))?/i)
+      if (directMatch) {
+        const host = directMatch[1]
+        const port = parseInt(directMatch[2] || '631')
         const nc = spawnSync('nc', ['-z', '-w', '2', host, String(port)], { timeout: 3000 })
-        if (nc.status !== 0) return 'unavailable'
+        if (nc.status !== 0) {
+          console.log('[cups]', printerName, '→ OFFLINE (cannot reach', host + ':' + port + ')')
+          return 'unavailable'
+        }
+        console.log('[cups]', printerName, '→ idle (TCP ok)')
+      } else {
+        // dnssd:// Bonjour 地址跳过 TCP，信任 lpstat
+        console.log('[cups]', printerName, '→ idle (Bonjour/trust)')
       }
       return 'idle'
     } catch { return 'idle' }
