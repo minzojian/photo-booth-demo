@@ -296,6 +296,6 @@ docker run --env-file apps/cloud-server/.env -p 4000:4000 photo-booth-server
 
 ## 项目合作
 
-对本项目感兴趣？加我微信：
+对本项目感兴趣？加我微信：minzojian
 
 ![微信](docs/jpg/wechat.jpg)

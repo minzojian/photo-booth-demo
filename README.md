@@ -293,6 +293,8 @@ Multi-tenancy billing, AI features, OTA canary (removed from initial scaffolding
 
 ## Collaborate
 
-Interested in this project? Add me on WeChat:
+Interested in this project? Add me on WeChat:minzojian   
+or   
+email: minzojian@hotmail.com
 
 ![WeChat](docs/jpg/wechat.jpg)
