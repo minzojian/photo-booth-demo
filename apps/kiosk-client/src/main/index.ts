@@ -225,17 +225,40 @@ app.whenReady().then(async () => {
     } catch { return null }
   }
 
+  // macOS CUPS 查询耗材（墨水/碳粉、纸张）
+  const getSupplies = (printerName: string): { inkLevels: { name: string; pct: number }[]; paperLevel: number | null } | null => {
+    if (process.platform !== 'darwin') return null
+    try {
+      const r = spawnSync('lpoptions', ['-p', printerName, '-l'], { encoding: 'utf8', timeout: 3000 })
+      const out = r.stdout || ''
+      const ink: { name: string; pct: number }[] = []
+      for (const line of out.split('\n')) {
+        const m = line.match(/(marker|ink|toner).*?[-:]?\s*(\d+)/i)
+        if (m) ink.push({ name: m[1], pct: Math.min(100, Math.max(0, parseInt(m[2]))) })
+      }
+      const paperM = out.match(/(paper|media).*?[-:]?\s*(\d+)/i)
+      const paper = paperM ? Math.min(100, Math.max(0, parseInt(paperM[2]))) : null
+      if (ink.length === 0 && paper == null) return null
+      return { inkLevels: ink, paperLevel: paper }
+    } catch { return null }
+  }
+
   ipcMain.handle('printer:list', () => {
     const list = (win?.webContents.getPrintersAsync() ?? []).then(async (raw) => {
       return Promise.all(raw.map(async (p) => {
         const detailed = getDetailedStatus(p.name)
-        return { ...p, detailedStatus: detailed }
+        const supplies = getSupplies(p.name)
+        return { ...p, detailedStatus: detailed, supplies }
       }))
     })
     return list
   })
   ipcMain.handle('printer:test', () => {
     win?.webContents.print({ silent: false, printBackground: true }, () => {})
+  });
+  ipcMain.handle('printer:select', (_e, name: string) => {
+    settings.printerName = name
+    saveSettings(settingsPath, settings)
   });
 
   // 定时清理过期照片（启动时 + 每 6 小时）

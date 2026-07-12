@@ -75,6 +75,9 @@ const zh: Record<string, string> = {
   'printer.status.unavailable': '不可用',
   'printer.default': '默认',
   'printer.testPrint': '测试打印',
+  'printer.refresh': '刷新',
+  'printer.selected': '已选用',
+  'printer.paper': '纸张',
   'printer.hint': '点击「测试打印」可在系统打印对话框中选择打印机（包括虚拟 PDF 打印机）',
 
   // Tasks / 上传任务
@@ -213,6 +216,9 @@ const en: Record<string, string> = {
   'printer.status.unavailable': 'Unavailable',
   'printer.default': 'Default',
   'printer.testPrint': 'Test Print',
+  'printer.refresh': 'Refresh',
+  'printer.selected': 'Selected',
+  'printer.paper': 'Paper',
   'printer.hint': 'Click "Test Print" to open the system print dialog (supports virtual PDF printers)',
 
   // Tasks

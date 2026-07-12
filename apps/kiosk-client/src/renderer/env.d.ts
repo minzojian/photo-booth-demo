@@ -24,15 +24,21 @@ export interface AppSettings {
   retentionDays: number;
   autoUpdateEnabled: boolean;
   language: 'zh' | 'en';
+  printerName?: string;
 }
 
+export interface PrinterSupplies {
+  inkLevels: { name: string; pct: number }[]
+  paperLevel: number | null // 0-100, null=unknown
+}
 export interface PrinterInfo {
   name: string;
   displayName: string;
   description: string;
   status: number;
   isDefault: boolean;
-  detailedStatus?: string | null; // lpstat 精确状态: 'idle' | 'active' | 'unavailable' | null
+  detailedStatus?: string | null;
+  supplies?: PrinterSupplies | null;
 }
 
 declare global {
@@ -64,6 +70,7 @@ declare global {
       onAdminHotkey(cb: () => void): void;
       listPrinters(): Promise<PrinterInfo[]>;
       testPrint(): Promise<void>;
+      selectPrinter(name: string): Promise<void>;
     };
   }
 }

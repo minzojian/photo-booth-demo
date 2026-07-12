@@ -1333,13 +1333,12 @@ export default function App() {
                 </div>
               )}
               {tab === 'printer' && (
-                <div style={{ maxWidth: 440 }}>
+                <div style={{ maxWidth: 460 }}>
                   <div style={{ fontWeight: 700, marginBottom: 14 }}>{t('printer.title')}</div>
                   {printers.length === 0 && (
                     <div style={{ color: '#6b7280', fontSize: 14, marginBottom: 12 }}>{t('printer.empty')}</div>
                   )}
                   {printers.map((p, i) => {
-                    // 优先用 lpstat 精确状态；Electron 原生码只作兜底
                     const ds = p.detailedStatus
                     const isUnavailable = ds === 'unavailable' || (ds == null && p.status === 2)
                     const isActive = ds === 'active' || (ds == null && p.status === 1)
@@ -1347,34 +1346,67 @@ export default function App() {
                       : isActive ? t('printer.status.active')
                       : t('printer.status.idle')
                     const statusColor = isUnavailable ? '#f87171' : isActive ? '#fbbf24' : '#4ade80'
+                    const isSelected = appSettings.printerName ? p.name === appSettings.printerName : p.isDefault
+                    const hasSupplies = p.supplies && (p.supplies.inkLevels.length > 0 || p.supplies.paperLevel != null)
                     return (
                       <div key={i} style={{
-                        background: 'rgba(255,255,255,.06)',
+                        background: isSelected ? 'rgba(167,139,250,.12)' : 'rgba(255,255,255,.06)',
+                        border: isSelected ? '1px solid rgba(167,139,250,.3)' : '1px solid transparent',
                         borderRadius: 8,
                         padding: '14px 16px',
                         marginBottom: 8,
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 12,
+                        cursor: 'pointer',
+                      }} onClick={() => {
+                        if (isSelected) return
+                        const s = { ...appSettings, printerName: p.name }
+                        setAppSettings(s)
+                        window.kiosk.setSettings(s)
+                        window.kiosk.selectPrinter(p.name)
                       }}>
-                        <span style={{ fontSize: 24 }}>🖨️</span>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontWeight: 600 }}>
-                            {p.displayName || p.name}
-                            {p.isDefault && (
-                              <span style={{ marginLeft: 8, fontSize: 11, color: '#a78bfa' }}>[{t('printer.default')}]</span>
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                          <span style={{ fontSize: 24, lineHeight: 1 }}>🖨️</span>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontWeight: 600, marginBottom: 2 }}>
+                              {p.displayName || p.name}
+                              {isSelected && <span style={{ marginLeft: 8, fontSize: 11, color: '#a78bfa' }}>✓ {t('printer.selected')}</span>}
+                              {!isSelected && p.isDefault && <span style={{ marginLeft: 8, fontSize: 11, color: '#9ca3af' }}>[{t('printer.default')}]</span>}
+                            </div>
+                            <div style={{ fontSize: 12, color: statusColor, marginBottom: hasSupplies ? 8 : 0 }}>
+                              {statusLabel}
+                            </div>
+                            {hasSupplies && (
+                              <div style={{ fontSize: 11, color: '#9ca3af' }}>
+                                {p.supplies!.inkLevels.map((ink, j) => (
+                                  <div key={j} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                                    <span style={{ width: 36 }}>{ink.name}</span>
+                                    <div style={{ flex: 1, height: 6, background: 'rgba(255,255,255,.1)', borderRadius: 3, overflow: 'hidden' }}>
+                                      <div style={{ width: `${ink.pct}%`, height: '100%', background: ink.pct > 20 ? '#4ade80' : '#f87171', borderRadius: 3, transition: 'width .3s' }} />
+                                    </div>
+                                    <span style={{ width: 32, textAlign: 'right' }}>{ink.pct}%</span>
+                                  </div>
+                                ))}
+                                {p.supplies!.paperLevel != null && (
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <span style={{ width: 36 }}>{t('printer.paper')}</span>
+                                    <div style={{ flex: 1, height: 6, background: 'rgba(255,255,255,.1)', borderRadius: 3, overflow: 'hidden' }}>
+                                      <div style={{ width: `${p.supplies!.paperLevel}%`, height: '100%', background: p.supplies!.paperLevel! > 20 ? '#4ade80' : '#f87171', borderRadius: 3 }} />
+                                    </div>
+                                    <span style={{ width: 32, textAlign: 'right' }}>{p.supplies!.paperLevel}%</span>
+                                  </div>
+                                )}
+                              </div>
                             )}
-                          </div>
-                          <div style={{ fontSize: 12, color: statusColor }}>
-                            {statusLabel}
                           </div>
                         </div>
                       </div>
                     )
                   })}
-                  <div style={{ marginTop: 12 }}>
+                  <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
                     <button className="pbtn" onClick={() => window.kiosk.testPrint()}>
                       🖨️ {t('printer.testPrint')}
+                    </button>
+                    <button className="pbtn ghost" onClick={() => { setPrintersLoaded(false); window.kiosk.listPrinters().then((p) => { setPrinters(p); setPrintersLoaded(true) }) }}>
+                      🔄 {t('printer.refresh')}
                     </button>
                   </div>
                   <div style={{ fontSize: 12, color: '#6b7280', marginTop: 10 }}>
