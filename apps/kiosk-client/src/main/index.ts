@@ -220,10 +220,10 @@ app.whenReady().then(async () => {
         }
         const escaped = printerName.replace(/'/g, "'\\''")
         const full = run(`lpstat -p '${escaped}'`) + run(`lpstat -a '${escaped}'`)
+        console.log('[cups]', printerName, '→', full.trim().replace(/\n/g, ' | '))
         if (/disabled|rejecting|not accepting/i.test(full)) return 'unavailable'
         if (/processing|printing/i.test(full)) return 'active'
 
-        // 直连 TCP 检测
         const devUri = run(`lpstat -v '${escaped}'`).trim()
         const dm = devUri.match(/(?:socket|ipp|ipps|lpd):\/\/([\w.-]+)(?::(\d+))?/i)
         if (dm) {
@@ -238,7 +238,7 @@ app.whenReady().then(async () => {
         const escaped = printerName.replace(/"/g, '`"')
         const r = spawnSync('powershell', ['-NoProfile', '-Command', `(Get-Printer -Name "${escaped}").PrinterStatus`], { encoding: 'utf8', timeout: 5000 })
         const status = (r.stdout || '').trim()
-        // Normal=正常, Offline=离线, Error/Paused/NotAvailable=不可用
+        console.log('[win-printer]', printerName, '→', status || '(no output)')
         if (!status || /Offline|Error|NotAvailable|Paused/i.test(status)) return 'unavailable'
         if (/Printing|Busy|Processing/i.test(status)) return 'active'
         return 'idle'
