@@ -210,20 +210,34 @@ app.whenReady().then(async () => {
     return settings;
   });
 
-  // macOS 打印机状态 — lpstat 比 IPP 更通用
+  // macOS 打印机状态 — lpstat + 网络连通检测
   const getDetailedStatus = (printerName: string): string => {
     if (process.platform !== 'darwin') return 'idle'
     try {
-      // lpstat -p: 打印机会话状态
       const r1 = spawnSync('lpstat', ['-p', printerName], { encoding: 'utf8', timeout: 3000 })
       const out1 = (r1.stdout || '') + (r1.stderr || '')
-      // lpstat -a: 是否接受任务
       const r2 = spawnSync('lpstat', ['-a', printerName], { encoding: 'utf8', timeout: 3000 })
       const out2 = (r2.stdout || '')
       const full = out1 + out2
-      // 离线/不可用的特征
-      if (/disabled|rejecting|not accept|unreachable|unable|communication error/i.test(full)) return 'unavailable'
-      if (/processing|printing|active|busy/i.test(full)) return 'active'
+      // 中英文关键词
+      if (/disabled|禁用|rejecting|拒绝|not accept|不接受|unreachable|不可达|unable|无法|communication error|通信错误/i.test(full)) return 'unavailable'
+      if (/processing|打印中|printing|active|活跃|busy|忙碌/i.test(full)) return 'active'
+
+      // lpstat 说 idle，主动检测网络连通性：获取设备 URI → TCP 连接
+      const r3 = spawnSync('lpstat', ['-v', printerName], { encoding: 'utf8', timeout: 3000 })
+      const devOut = r3.stdout || ''
+      // 提取主机名或 IP: dnssd://... 或 socket://host:port 或 ipp://host/...
+      const hostMatch = devOut.match(/(?:socket|ipp|ipps|lpd|dnssd):\/\/[^/]*?@?([\w.-]+)(?::(\d+))?/i)
+      if (hostMatch) {
+        const host = hostMatch[1]
+        const port = parseInt(hostMatch[2] || '631')
+        // 快速 TCP 连接检测（超时 2s）
+        const nc = spawnSync('nc', ['-z', '-w', '2', host, String(port)], { timeout: 3000 })
+        if (nc.status !== 0) {
+          console.log('[cups]', printerName, '→ offline (cannot reach', host + ':' + port + ')')
+          return 'unavailable'
+        }
+      }
       return 'idle'
     } catch { return 'idle' }
   }
