@@ -44,7 +44,9 @@ jobs:
         run: |
           pnpm run build
           ELECTRON_VER=$(node -p "require('electron/package.json').version")
-          npx electron-builder --mac --arm64 --publish never -c.electronVersion="$ELECTRON_VER" && node scripts/rename-with-hash.cjs --version=$(node -p "require('./package.json').version")
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"
+          npx electron-builder --mac --arm64 --publish never -c.electronVersion="$ELECTRON_VER" && node scripts/rename-with-hash.cjs --version="$VERSION"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -86,9 +88,10 @@ jobs:
         run: |
           pnpm run build
           $electronVer = node -p "require('electron/package.json').version"
+          $VERSION = "${{ github.ref_name }}" -replace '^v', ''
           npx electron-builder --win --x64 --publish never "-c.electronVersion=$electronVer"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          node scripts/rename-with-hash.cjs --version=$(node -p "require('./package.json').version")
+          node scripts/rename-with-hash.cjs --version=$VERSION
           Write-Host "=== Release directory contents ==="
           Get-ChildItem release -Name
 
@@ -114,9 +117,7 @@ jobs:
 
       - name: Get version
         id: version
-        run: |
-          VERSION=$(node -p "require('./apps/kiosk-client/package.json').version")
-          echo "value=v$VERSION" >> "$GITHUB_OUTPUT"
+        run: echo "value=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
 
       - name: Download macOS artifacts
         uses: actions/download-artifact@v4
