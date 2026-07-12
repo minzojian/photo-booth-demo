@@ -209,6 +209,7 @@ pnpm db:setup     # 种子数据 (admin/admin123)
 pnpm dev
 
 # 2) 中台 (:8000) —— admin / admin123
+#    生产地址: https://static.lunastudio.cn/projects/photo_booth/admin/index.html
 cd apps/admin-dashboard && pnpm dev
 
 # 3) 前台 (Electron)

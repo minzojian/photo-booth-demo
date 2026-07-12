@@ -207,6 +207,7 @@ pnpm db:setup     # Seed data (admin/admin123)
 pnpm dev
 
 # 2) Admin (:8000) — admin / admin123
+#    Production: https://static.lunastudio.cn/projects/photo_booth/admin/index.html
 cd apps/admin-dashboard && pnpm dev
 
 # 3) Kiosk (Electron)
