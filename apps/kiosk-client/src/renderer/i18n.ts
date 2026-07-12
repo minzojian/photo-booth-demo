@@ -65,6 +65,17 @@ const zh: Record<string, string> = {
   'admin.tab.system': '系统状态',
   'admin.tab.about': '关于与更新',
   'admin.tab.settings': '本地存储',
+  'admin.tab.printer': '打印机',
+
+  // Printer / 打印机
+  'printer.title': '打印机',
+  'printer.empty': '未检测到打印机',
+  'printer.status.idle': '就绪',
+  'printer.status.active': '打印中',
+  'printer.status.unavailable': '不可用',
+  'printer.default': '默认',
+  'printer.testPrint': '测试打印',
+  'printer.hint': '点击「测试打印」可在系统打印对话框中选择打印机（包括虚拟 PDF 打印机）',
 
   // Tasks / 上传任务
   'tasks.empty': '暂无任务',
@@ -192,6 +203,17 @@ const en: Record<string, string> = {
   'admin.tab.system': 'System',
   'admin.tab.about': 'About & Update',
   'admin.tab.settings': 'Storage',
+  'admin.tab.printer': 'Printer',
+
+  // Printer
+  'printer.title': 'Printer',
+  'printer.empty': 'No printer detected',
+  'printer.status.idle': 'Ready',
+  'printer.status.active': 'Printing',
+  'printer.status.unavailable': 'Unavailable',
+  'printer.default': 'Default',
+  'printer.testPrint': 'Test Print',
+  'printer.hint': 'Click "Test Print" to open the system print dialog (supports virtual PDF printers)',
 
   // Tasks
   'tasks.empty': 'No tasks',

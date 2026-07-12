@@ -292,7 +292,7 @@ docker run --env-file apps/cloud-server/.env -p 4000:4000 photo-booth-server
 
 ## 不在本 demo 范围
 
-多租户计费、AI、OTA 灰度（已从初始脚手架移除）。
+多租户计费、AI、OTA 灰度（已从初始脚手架移除）。打印功能预留了打印机识别和测试打印接口，实际接入热敏/喷墨打印机属于部署实施层面。
 
 ## 项目合作
 

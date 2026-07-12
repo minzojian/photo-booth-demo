@@ -26,6 +26,14 @@ export interface AppSettings {
   language: 'zh' | 'en';
 }
 
+export interface PrinterInfo {
+  name: string;
+  displayName: string;
+  description: string;
+  status: number; // 0=idle, 1=active, 2=unavailable
+  isDefault: boolean;
+}
+
 declare global {
   interface Window {
     kiosk: {
@@ -53,6 +61,8 @@ declare global {
       onCommand(cb: (cmd: RemoteCommandView) => void): void;
       onTasksChanged(cb: () => void): void;
       onAdminHotkey(cb: () => void): void;
+      listPrinters(): Promise<PrinterInfo[]>;
+      testPrint(): Promise<void>;
     };
   }
 }

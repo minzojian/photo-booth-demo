@@ -26,4 +26,6 @@ contextBridge.exposeInMainWorld('kiosk', {
   onCommand: (cb: (cmd: unknown) => void) => ipcRenderer.on('kiosk:command', (_e, cmd) => cb(cmd)),
   onTasksChanged: (cb: () => void) => ipcRenderer.on('kiosk:tasks-changed', () => cb()),
   onAdminHotkey: (cb: () => void) => ipcRenderer.on('kiosk:admin-hotkey', () => cb()),
+  listPrinters: () => ipcRenderer.invoke('printer:list'),
+  testPrint: () => ipcRenderer.invoke('printer:test'),
 });

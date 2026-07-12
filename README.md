@@ -289,7 +289,7 @@ docker run --env-file apps/cloud-server/.env -p 4000:4000 photo-booth-server
 
 ## Out of Scope
 
-Multi-tenancy billing, AI features, OTA canary (removed from initial scaffolding).
+Multi-tenancy billing, AI features, OTA canary (removed from initial scaffolding). Print functionality includes printer detection and test-print hooks; actual thermal/inkjet printer integration is deployment-level implementation.
 
 ## Collaborate
 

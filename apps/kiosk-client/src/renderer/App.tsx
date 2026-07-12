@@ -6,12 +6,12 @@ import { captureSquareFromVideo, composeWithTemplate } from './booth/compose'
 import type { Shot, PlacedSticker } from './booth/compose'
 import { loadTemplates, templatesForShotCount } from './booth/templates'
 import type { Template, FrameDef } from './booth/templates'
-import type { KioskTask, RemoteCommandView, SystemStatus, UpdateEvent, AppSettings } from './env'
+import type { KioskTask, RemoteCommandView, SystemStatus, UpdateEvent, AppSettings, PrinterInfo } from './env'
 import { createT, type Lang, type TFunc } from './i18n'
 
 type Stage = 'welcome' | 'mode' | 'shoot' | 'edit' | 'result'
 type AdminStage = 'hidden' | 'pin' | 'open'
-type Tab = 'tasks' | 'system' | 'about' | 'settings'
+type Tab = 'tasks' | 'system' | 'about' | 'settings' | 'printer'
 let idc = 0
 const uid = () => `id_${Date.now()}_${idc++}`
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
@@ -52,6 +52,8 @@ export default function App() {
   const [tab, setTab] = useState<Tab>('tasks')
   const [tasks, setTasks] = useState<KioskTask[]>([])
   const [sys, setSys] = useState<SystemStatus | null>(null)
+  const [printers, setPrinters] = useState<PrinterInfo[]>([])
+  const [printersLoaded, setPrintersLoaded] = useState(false)
   const [version, setVersion] = useState('...')
   const [upd, setUpd] = useState<{
     phase: string
@@ -1095,6 +1097,9 @@ export default function App() {
                 <button className={tab === 'settings' ? 'on' : ''} onClick={() => setTab('settings')}>
                   {t('admin.tab.settings')}
                 </button>
+                <button className={tab === 'printer' ? 'on' : ''} onClick={() => { setTab('printer'); if (!printersLoaded) { window.kiosk.listPrinters().then((p) => { setPrinters(p); setPrintersLoaded(true) }) } }}>
+                  {t('admin.tab.printer')}
+                </button>
               </div>
               <button className="close" onClick={() => setAdmin('hidden')}>
                 ×
@@ -1324,6 +1329,49 @@ export default function App() {
                         {d === 30 ? t('settings.days.30') : (d === 7 ? t('settings.days.7') : t('settings.days.14'))}
                       </button>
                     ))}
+                  </div>
+                </div>
+              )}
+              {tab === 'printer' && (
+                <div style={{ maxWidth: 440 }}>
+                  <div style={{ fontWeight: 700, marginBottom: 14 }}>{t('printer.title')}</div>
+                  {printers.length === 0 && (
+                    <div style={{ color: '#6b7280', fontSize: 14, marginBottom: 12 }}>{t('printer.empty')}</div>
+                  )}
+                  {printers.map((p, i) => {
+                    const statusLabels: Record<number, string> = { 0: t('printer.status.idle'), 1: t('printer.status.active'), 2: t('printer.status.unavailable') }
+                    return (
+                      <div key={i} style={{
+                        background: 'rgba(255,255,255,.06)',
+                        borderRadius: 8,
+                        padding: '14px 16px',
+                        marginBottom: 8,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 12,
+                      }}>
+                        <span style={{ fontSize: 24 }}>🖨️</span>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 600 }}>
+                            {p.displayName || p.name}
+                            {p.isDefault && (
+                              <span style={{ marginLeft: 8, fontSize: 11, color: '#a78bfa' }}>[{t('printer.default')}]</span>
+                            )}
+                          </div>
+                          <div style={{ fontSize: 12, color: p.status === 0 ? '#4ade80' : p.status === 1 ? '#fbbf24' : '#f87171' }}>
+                            {statusLabels[p.status] ?? `Status ${p.status}`}
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                  <div style={{ marginTop: 12 }}>
+                    <button className="pbtn" onClick={() => window.kiosk.testPrint()}>
+                      🖨️ {t('printer.testPrint')}
+                    </button>
+                  </div>
+                  <div style={{ fontSize: 12, color: '#6b7280', marginTop: 10 }}>
+                    {t('printer.hint')}
                   </div>
                 </div>
               )}

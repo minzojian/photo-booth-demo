@@ -209,6 +209,12 @@ app.whenReady().then(async () => {
     return settings;
   });
 
+  // 打印机
+  ipcMain.handle('printer:list', () => win?.webContents.getPrintersAsync() ?? []);
+  ipcMain.handle('printer:test', () => {
+    win?.webContents.print({ silent: false, printBackground: true }, () => {});
+  });
+
   // 定时清理过期照片（启动时 + 每 6 小时）
   const runCleanup = () => {
     const count = cleanupOldPhotos(filesDir, settings);
