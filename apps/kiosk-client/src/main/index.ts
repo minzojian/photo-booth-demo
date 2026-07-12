@@ -210,8 +210,26 @@ app.whenReady().then(async () => {
     return settings;
   });
 
-  // macOS CUPS IPP 查询打印机状态 + 耗材
-  const queryCupsPrinter = (printerName: string): Promise<{ detailedStatus: string; supplies: { inkLevels: { name: string; pct: number }[] } | null } | null> => {
+  // macOS 打印机状态 — lpstat 比 IPP 更通用
+  const getDetailedStatus = (printerName: string): string => {
+    if (process.platform !== 'darwin') return 'idle'
+    try {
+      // lpstat -p: 打印机会话状态
+      const r1 = spawnSync('lpstat', ['-p', printerName], { encoding: 'utf8', timeout: 3000 })
+      const out1 = (r1.stdout || '') + (r1.stderr || '')
+      // lpstat -a: 是否接受任务
+      const r2 = spawnSync('lpstat', ['-a', printerName], { encoding: 'utf8', timeout: 3000 })
+      const out2 = (r2.stdout || '')
+      const full = out1 + out2
+      // 离线/不可用的特征
+      if (/disabled|rejecting|not accept|unreachable|unable|communication error/i.test(full)) return 'unavailable'
+      if (/processing|printing|active|busy/i.test(full)) return 'active'
+      return 'idle'
+    } catch { return 'idle' }
+  }
+
+  // macOS CUPS IPP 查询耗材（墨水/碳粉）
+  const getSupplies = (printerName: string): Promise<{ inkLevels: { name: string; pct: number }[] } | null> => {
     return new Promise((resolve) => {
       if (process.platform !== 'darwin') return resolve(null)
       const printerUri = `ipp://localhost/printers/${encodeURIComponent(printerName)}`
@@ -219,8 +237,6 @@ app.whenReady().then(async () => {
         [0x47, 'attributes-charset', 'utf-8'],
         [0x48, 'attributes-natural-language', 'en-us'],
         [0x45, 'printer-uri', printerUri],
-        [0x44, 'requested-attributes', 'printer-state'],
-        [0x44, 'requested-attributes', 'printer-state-reasons'],
         [0x44, 'requested-attributes', 'marker-levels'],
       ]
       const bodyParts: Buffer[] = []
@@ -237,59 +253,35 @@ app.whenReady().then(async () => {
       bodyParts.push(Buffer.from([0x03]))
       const body = Buffer.concat(bodyParts)
 
-      const parseResult = (data: Buffer) => {
-        const text = data.toString('utf8')
-        // printer-state-reasons: 在 IPP 响应中查找 reasons 关键词
-        let detailedStatus = 'idle'
-        const reasonsIdx = text.indexOf('printer-state-reasons')
-        if (reasonsIdx >= 0) {
-          // reasons 属性后面紧跟 value 标签和 keyword 值
-          const afterReasons = text.substring(reasonsIdx)
-          const kwMatch = afterReasons.match(/printer-state-reasons[\s\S]{0,30}(none|offline|unreachable|connecting-to-device|paused|stopped|other)/i)
-          const kw = kwMatch ? kwMatch[1].toLowerCase() : 'none'
-          console.log('[cups]', printerName, 'reasons keyword:', kw)
-          if (kw !== 'none') detailedStatus = 'unavailable'
-        } else {
-          console.log('[cups]', printerName, 'no printer-state-reasons in IPP response')
-        }
-
-        // marker-levels
-        const ink: { name: string; pct: number }[] = []
-        const markerIdx = data.indexOf('marker-levels')
-        if (markerIdx >= 0) {
-          let pos = markerIdx + 'marker-levels'.length
-          while (pos < data.length - 6) {
-            if (data[pos] === 0x21 || data[pos] === 0x23) {
-              const nameLen = data.readUInt16BE(pos + 1)
-              pos += 3 + nameLen
-              const valLen = data.readUInt16BE(pos)
-              pos += 2
-              if (valLen === 4) {
-                ink.push({ name: `Ink ${ink.length + 1}`, pct: Math.min(100, Math.max(0, data.readInt32BE(pos))) })
-                pos += 4
-              } else { pos += valLen }
-            } else { pos++ }
-            if (ink.length >= 8) break
-          }
-        }
-        resolve({ detailedStatus, supplies: ink.length > 0 ? { inkLevels: ink } : null })
-      }
-
-      const req = httpRequest({ hostname: '127.0.0.1', port: 631, path: `/printers/${encodeURIComponent(printerName)}`, method: 'POST', headers: { 'Content-Type': 'application/ipp', 'Content-Length': String(body.length) }, timeout: 4000 }, (res) => {
+      const req = httpRequest({ hostname: '127.0.0.1', port: 631, path: `/printers/${encodeURIComponent(printerName)}`, method: 'POST', headers: { 'Content-Type': 'application/ipp', 'Content-Length': String(body.length) }, timeout: 3000 }, (res) => {
         const chunks: Buffer[] = []
         res.on('data', (c: Buffer) => chunks.push(c))
-        res.on('end', () => { try { parseResult(Buffer.concat(chunks)) } catch { resolve(null) } })
+        res.on('end', () => {
+          try {
+            const data = Buffer.concat(chunks)
+            const ink: { name: string; pct: number }[] = []
+            const markerIdx = data.indexOf('marker-levels')
+            if (markerIdx >= 0) {
+              let pos = markerIdx + 'marker-levels'.length
+              while (pos < data.length - 6) {
+                if (data[pos] === 0x21 || data[pos] === 0x23) {
+                  const nameLen = data.readUInt16BE(pos + 1)
+                  pos += 3 + nameLen
+                  const valLen = data.readUInt16BE(pos)
+                  pos += 2
+                  if (valLen === 4) {
+                    ink.push({ name: `Ink ${ink.length + 1}`, pct: Math.min(100, Math.max(0, data.readInt32BE(pos))) })
+                    pos += 4
+                  } else { pos += valLen }
+                } else { pos++ }
+                if (ink.length >= 8) break
+              }
+            }
+            resolve(ink.length > 0 ? { inkLevels: ink } : null)
+          } catch { resolve(null) }
+        })
       })
-      req.on('error', (e) => {
-        // IPP 失败时回退到 lpstat
-        console.log('[cups] IPP failed for', printerName, ':', e.message, '- falling back to lpstat')
-        try {
-          const r = spawnSync('lpstat', ['-p', printerName], { encoding: 'utf8', timeout: 3000 })
-          const out = (r.stdout || '')
-          const unavail = out.includes('disabled') || out.includes('rejecting') || out.includes('unreachable')
-          resolve({ detailedStatus: unavail ? 'unavailable' : 'idle', supplies: null })
-        } catch { resolve(null) }
-      })
+      req.on('error', () => resolve(null))
       req.on('timeout', () => { req.destroy(); resolve(null) })
       req.write(body)
       req.end()
@@ -299,8 +291,9 @@ app.whenReady().then(async () => {
   ipcMain.handle('printer:list', () => {
     return (win?.webContents.getPrintersAsync() ?? []).then(async (raw) => {
       return Promise.all(raw.map(async (p) => {
-        const info = await queryCupsPrinter(p.name)
-        return { ...p, detailedStatus: info?.detailedStatus ?? null, supplies: info?.supplies ?? null }
+        const detailedStatus = getDetailedStatus(p.name)
+        const supplies = await getSupplies(p.name)
+        return { ...p, detailedStatus, supplies }
       }))
     })
   })
