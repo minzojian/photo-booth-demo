@@ -210,36 +210,41 @@ app.whenReady().then(async () => {
     return settings;
   });
 
-  // macOS 打印机状态 — 用 bash -c 强制英文 + 直连 TCP
+  // 打印机状态检测 — macOS bash LC_ALL=C + Windows PowerShell
   const getDetailedStatus = (printerName: string): string => {
-    if (process.platform !== 'darwin') return 'idle'
-    try {
-      const run = (cmd: string) => {
-        const r = spawnSync('bash', ['-c', `export LC_ALL=C LANG=C LANGUAGE=en && ${cmd}`], { encoding: 'utf8', timeout: 3000 })
-        return (r.stdout || '') + (r.stderr || '')
-      }
-      const full = run(`lpstat -p '${printerName.replace(/'/g, "'\\''")}'`) + run(`lpstat -a '${printerName.replace(/'/g, "'\\''")}'`)
-      console.log('[cups]', printerName, 'lpstat:', full.trim().replace(/\n/g, ' | '))
-      if (/disabled|rejecting|not accepting/i.test(full)) return 'unavailable'
-      if (/processing|printing/i.test(full)) return 'active'
-
-      // 直连 URI TCP 检测
-      const devUri = run(`lpstat -v '${printerName.replace(/'/g, "'\\''")}'`).trim()
-      const directMatch = devUri.match(/(?:socket|ipp|ipps|lpd):\/\/([\w.-]+)(?::(\d+))?/i)
-      if (directMatch) {
-        const host = directMatch[1]
-        const port = parseInt(directMatch[2] || '631')
-        const nc = spawnSync('nc', ['-z', '-w', '2', host, String(port)], { timeout: 3000 })
-        if (nc.status !== 0) {
-          console.log('[cups]', printerName, '→ OFFLINE (cannot reach', host + ':' + port + ')')
-          return 'unavailable'
+    if (process.platform === 'darwin') {
+      try {
+        const run = (cmd: string) => {
+          const r = spawnSync('bash', ['-c', `export LC_ALL=C LANG=C LANGUAGE=en && ${cmd}`], { encoding: 'utf8', timeout: 3000 })
+          return (r.stdout || '') + (r.stderr || '')
         }
-        console.log('[cups]', printerName, '→ idle (TCP ok)')
-      } else {
-        console.log('[cups]', printerName, '→ idle (Bonjour/trust)')
-      }
-      return 'idle'
-    } catch { return 'idle' }
+        const escaped = printerName.replace(/'/g, "'\\''")
+        const full = run(`lpstat -p '${escaped}'`) + run(`lpstat -a '${escaped}'`)
+        if (/disabled|rejecting|not accepting/i.test(full)) return 'unavailable'
+        if (/processing|printing/i.test(full)) return 'active'
+
+        // 直连 TCP 检测
+        const devUri = run(`lpstat -v '${escaped}'`).trim()
+        const dm = devUri.match(/(?:socket|ipp|ipps|lpd):\/\/([\w.-]+)(?::(\d+))?/i)
+        if (dm) {
+          const nc = spawnSync('nc', ['-z', '-w', '2', dm[1], String(parseInt(dm[2] || '631'))], { timeout: 3000 })
+          if (nc.status !== 0) return 'unavailable'
+        }
+        return 'idle'
+      } catch { return 'idle' }
+    }
+    if (process.platform === 'win32') {
+      try {
+        const escaped = printerName.replace(/"/g, '`"')
+        const r = spawnSync('powershell', ['-NoProfile', '-Command', `(Get-Printer -Name "${escaped}").PrinterStatus`], { encoding: 'utf8', timeout: 5000 })
+        const status = (r.stdout || '').trim()
+        // Normal=正常, Offline=离线, Error/Paused/NotAvailable=不可用
+        if (!status || /Offline|Error|NotAvailable|Paused/i.test(status)) return 'unavailable'
+        if (/Printing|Busy|Processing/i.test(status)) return 'active'
+        return 'idle'
+      } catch { return 'idle' }
+    }
+    return 'idle'
   }
 
   // macOS CUPS IPP 查询耗材（墨水/碳粉）
