@@ -210,7 +210,7 @@ app.whenReady().then(async () => {
     return settings;
   });
 
-  // macOS CUPS IPP 查询打印机状态 + 耗材 — 一次 IPP 请求获得全部
+  // macOS CUPS IPP 查询打印机状态 + 耗材
   const queryCupsPrinter = (printerName: string): Promise<{ detailedStatus: string; supplies: { inkLevels: { name: string; pct: number }[] } | null } | null> => {
     return new Promise((resolve) => {
       if (process.platform !== 'darwin') return resolve(null)
@@ -222,8 +222,6 @@ app.whenReady().then(async () => {
         [0x44, 'requested-attributes', 'printer-state'],
         [0x44, 'requested-attributes', 'printer-state-reasons'],
         [0x44, 'requested-attributes', 'marker-levels'],
-        [0x44, 'requested-attributes', 'marker-names'],
-        [0x44, 'requested-attributes', 'marker-colors'],
       ]
       const bodyParts: Buffer[] = []
       bodyParts.push(Buffer.from([0x02, 0x00, 0x00, 0x0B, 0x00, 0x00, 0x00, 0x01]))
@@ -239,47 +237,59 @@ app.whenReady().then(async () => {
       bodyParts.push(Buffer.from([0x03]))
       const body = Buffer.concat(bodyParts)
 
+      const parseResult = (data: Buffer) => {
+        const text = data.toString('utf8')
+        // printer-state-reasons: 在 IPP 响应中查找 reasons 关键词
+        let detailedStatus = 'idle'
+        const reasonsIdx = text.indexOf('printer-state-reasons')
+        if (reasonsIdx >= 0) {
+          // reasons 属性后面紧跟 value 标签和 keyword 值
+          const afterReasons = text.substring(reasonsIdx)
+          const kwMatch = afterReasons.match(/printer-state-reasons[\s\S]{0,30}(none|offline|unreachable|connecting-to-device|paused|stopped|other)/i)
+          const kw = kwMatch ? kwMatch[1].toLowerCase() : 'none'
+          console.log('[cups]', printerName, 'reasons keyword:', kw)
+          if (kw !== 'none') detailedStatus = 'unavailable'
+        } else {
+          console.log('[cups]', printerName, 'no printer-state-reasons in IPP response')
+        }
+
+        // marker-levels
+        const ink: { name: string; pct: number }[] = []
+        const markerIdx = data.indexOf('marker-levels')
+        if (markerIdx >= 0) {
+          let pos = markerIdx + 'marker-levels'.length
+          while (pos < data.length - 6) {
+            if (data[pos] === 0x21 || data[pos] === 0x23) {
+              const nameLen = data.readUInt16BE(pos + 1)
+              pos += 3 + nameLen
+              const valLen = data.readUInt16BE(pos)
+              pos += 2
+              if (valLen === 4) {
+                ink.push({ name: `Ink ${ink.length + 1}`, pct: Math.min(100, Math.max(0, data.readInt32BE(pos))) })
+                pos += 4
+              } else { pos += valLen }
+            } else { pos++ }
+            if (ink.length >= 8) break
+          }
+        }
+        resolve({ detailedStatus, supplies: ink.length > 0 ? { inkLevels: ink } : null })
+      }
+
       const req = httpRequest({ hostname: '127.0.0.1', port: 631, path: `/printers/${encodeURIComponent(printerName)}`, method: 'POST', headers: { 'Content-Type': 'application/ipp', 'Content-Length': String(body.length) }, timeout: 4000 }, (res) => {
         const chunks: Buffer[] = []
         res.on('data', (c: Buffer) => chunks.push(c))
-        res.on('end', () => {
-          try {
-            const data = Buffer.concat(chunks)
-            const text = data.toString('utf8')
-
-            // 解析 printer-state-reasons（离线等关键词）
-            const reasonsMatch = text.match(/printer-state-reasons[^]*?value[^]*?([a-z-]+)/i)
-            const reasons = reasonsMatch ? reasonsMatch[1].toLowerCase() : ''
-            const isOffline = reasons.includes('offline') || reasons.includes('unreachable') || reasons.includes('connecting-to-device')
-            const isStopped = text.includes('printer-state') && data[data.indexOf('printer-state') + 30] === 5
-            let detailedStatus = 'idle'
-            if (isOffline || isStopped) detailedStatus = 'unavailable'
-
-            // 解析 marker-levels
-            const ink: { name: string; pct: number }[] = []
-            const markerIdx = data.indexOf('marker-levels')
-            if (markerIdx >= 0) {
-              let pos = markerIdx + 'marker-levels'.length
-              while (pos < data.length - 6) {
-                if (data[pos] === 0x21 || data[pos] === 0x23) {
-                  const nameLen = data.readUInt16BE(pos + 1)
-                  pos += 3 + nameLen
-                  const valLen = data.readUInt16BE(pos)
-                  pos += 2
-                  if (valLen === 4) {
-                    const level = data.readInt32BE(pos)
-                    pos += 4
-                    ink.push({ name: `Ink ${ink.length + 1}`, pct: Math.min(100, Math.max(0, level)) })
-                  } else { pos += valLen }
-                } else { pos++ }
-                if (ink.length >= 8) break
-              }
-            }
-            resolve({ detailedStatus, supplies: ink.length > 0 ? { inkLevels: ink } : null })
-          } catch { resolve(null) }
-        })
+        res.on('end', () => { try { parseResult(Buffer.concat(chunks)) } catch { resolve(null) } })
       })
-      req.on('error', () => resolve(null))
+      req.on('error', (e) => {
+        // IPP 失败时回退到 lpstat
+        console.log('[cups] IPP failed for', printerName, ':', e.message, '- falling back to lpstat')
+        try {
+          const r = spawnSync('lpstat', ['-p', printerName], { encoding: 'utf8', timeout: 3000 })
+          const out = (r.stdout || '')
+          const unavail = out.includes('disabled') || out.includes('rejecting') || out.includes('unreachable')
+          resolve({ detailedStatus: unavail ? 'unavailable' : 'idle', supplies: null })
+        } catch { resolve(null) }
+      })
       req.on('timeout', () => { req.destroy(); resolve(null) })
       req.write(body)
       req.end()
