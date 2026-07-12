@@ -44,9 +44,7 @@ jobs:
         run: |
           pnpm run build
           ELECTRON_VER=$(node -p "require('electron/package.json').version")
-          VERSION="${{ github.ref_name }}"
-          VERSION="${VERSION#v}"
-          npx electron-builder --mac --arm64 --publish never -c.electronVersion="$ELECTRON_VER" && node scripts/rename-with-hash.cjs --version="$VERSION"
+          npx electron-builder --mac --arm64 --publish never -c.electronVersion="$ELECTRON_VER" && node scripts/rename-with-hash.cjs --version=$(node -p "require('./package.json').version")
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -88,10 +86,9 @@ jobs:
         run: |
           pnpm run build
           $electronVer = node -p "require('electron/package.json').version"
-          $VERSION = "${{ github.ref_name }}" -replace '^v', ''
           npx electron-builder --win --x64 --publish never "-c.electronVersion=$electronVer"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          node scripts/rename-with-hash.cjs --version=$VERSION
+          node scripts/rename-with-hash.cjs --version=$(node -p "require('./package.json').version")
           Write-Host "=== Release directory contents ==="
           Get-ChildItem release -Name
 
@@ -117,7 +114,14 @@ jobs:
 
       - name: Get version
         id: version
-        run: echo "value=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+        run: |
+          VERSION=$(node -p "require('./apps/kiosk-client/package.json').version")
+          TAG="${{ github.ref_name }}"
+          if [ "v$VERSION" != "$TAG" ]; then
+            echo "❌ tag ($TAG) 与 package.json 版本 ($VERSION) 不一致"
+            exit 1
+          fi
+          echo "value=v$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Download macOS artifacts
         uses: actions/download-artifact@v4
