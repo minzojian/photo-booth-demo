@@ -29,4 +29,5 @@ contextBridge.exposeInMainWorld('kiosk', {
   listPrinters: () => ipcRenderer.invoke('printer:list'),
   testPrint: () => ipcRenderer.invoke('printer:test'),
   selectPrinter: (name: string) => ipcRenderer.invoke('printer:select', name),
+  printFile: (filePath: string, printerName: string) => ipcRenderer.invoke('printer:printFile', filePath, printerName),
 });

@@ -47,7 +47,7 @@ declare global {
       getVersion(): Promise<string>;
       listTemplateDirs(): Promise<{dir:string;files:string[]}[]>;
       readTemplateFile(filePath: string): Promise<{ok:boolean;type?:'json'|'image';data?:unknown;error?:string}>;
-      saveCapture(png: ArrayBuffer, meta: { filename: string; contentType: string; capturedAt: number }): Promise<{ taskId: string; clientPhotoId: string }>;
+      saveCapture(png: ArrayBuffer, meta: { filename: string; contentType: string; capturedAt: number }): Promise<{ taskId: string; clientPhotoId: string; localPath: string }>;
       uploadCapture(taskId: string): Promise<{ ok: boolean; cosKey: string | null; error?: string }>;
       getSettings(): Promise<AppSettings>;
       setSettings(s: Partial<AppSettings>): Promise<AppSettings>;
@@ -70,6 +70,7 @@ declare global {
       listPrinters(): Promise<PrinterInfo[]>;
       testPrint(): Promise<void>;
       selectPrinter(name: string): Promise<void>;
+      printFile(filePath: string, printerName: string): Promise<{ ok: boolean; error?: string }>;
     };
   }
 }

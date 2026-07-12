@@ -45,6 +45,8 @@ export default function App() {
   const [qrUrl, setQrUrl] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
+  const [isPrinting, setIsPrinting] = useState(false)
+  const [printError, setPrintError] = useState<string | null>(null)
   // admin
   const [admin, setAdmin] = useState<AdminStage>('hidden')
   const [pin, setPin] = useState('')
@@ -330,13 +332,26 @@ export default function App() {
       contentType: 'image/png',
       capturedAt: Date.now(),
     })
-    console.log('[savePrint] 保存完成, taskId:', result.taskId, 'clientPhotoId:', result.clientPhotoId)
+    console.log('[savePrint] 保存完成, taskId:', result.taskId, 'localPath:', result.localPath)
     setPendingTaskId(result.taskId)
     setQrUrl(null)
     setUploadError(null)
+    setPrintError(null)
     setBusy(false)
     setStage('result')
-  }, [shots, template])
+
+    // 如果管理面板选了打印机，自动静默打印
+    const printerName = appSettings.printerName
+    if (printerName) {
+      setIsPrinting(true)
+      setPrintError(null)
+      try {
+        const pr = await window.kiosk.printFile(result.localPath, printerName)
+        if (!pr.ok) setPrintError(pr.error || 'print failed')
+      } catch (e) { setPrintError((e as Error).message) }
+      setIsPrinting(false)
+    }
+  }, [shots, template, appSettings.printerName])
 
   const startUpload = async () => {
     if (!pendingTaskId) {
@@ -985,12 +1000,24 @@ export default function App() {
       }}>
       <div style={{ fontSize: 60 }}>✅</div>
       <h2 style={{ fontSize: 28, margin: 0 }}>{t('result.title')}</h2>
-      <p style={{ fontSize: 16, opacity: 0.7, margin: 0, maxWidth: 360 }}>{t('result.print')}</p>
 
-      {!qrUrl && !uploading && !uploadError && (
+      {isPrinting && (
+        <div style={{ marginTop: 12 }}>
+          <div style={{ fontSize: 18, marginBottom: 8 }}>🖨️ {t('result.processing')}</div>
+          <div style={{ width: 200, height: 6, background: '#262636', borderRadius: 3, overflow: 'hidden', margin: '0 auto' }}>
+            <div style={{ width: '60%', height: '100%', background: 'linear-gradient(90deg,#7c3aed,#ec4899)', animation: 'kprog 2s ease infinite' }} />
+          </div>
+        </div>
+      )}
+
+      {!isPrinting && !qrUrl && !uploading && !uploadError && (
         <button className="big-btn" onClick={startUpload} style={{ fontSize: 18, padding: '14px 36px', marginTop: 12 }}>
           📱 {t('result.qr')}
         </button>
+      )}
+
+      {printError && (
+        <div style={{ marginTop: 8, fontSize: 13, color: '#f87171' }}>⚠️ {printError}</div>
       )}
 
       {uploading && (

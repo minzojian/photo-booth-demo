@@ -175,7 +175,7 @@ app.whenReady().then(async () => {
     const sha256 = createHash('sha256').update(buf).digest('hex');
     store.insert({ id: taskId, clientPhotoId, localPath, filename: meta.filename, size: buf.length, sha256, contentType: meta.contentType, capturedAt: meta.capturedAt, createdAt: Date.now() });
     notify();
-    return { taskId, clientPhotoId };
+    return { taskId, clientPhotoId, localPath };
   });
 
   ipcMain.handle('capture:upload', async (_e, taskId: string) => {
@@ -322,6 +322,22 @@ app.whenReady().then(async () => {
   ipcMain.handle('printer:select', (_e, name: string) => {
     settings.printerName = name
     saveSettings(settingsPath, settings)
+  });
+  // 静默打印文件到选定打印机（macOS lp / Windows Start-Process Print）
+  ipcMain.handle('printer:printFile', async (_e, filePath: string, printerName: string) => {
+    if (process.platform === 'darwin') {
+      return new Promise<{ ok: boolean; error?: string }>((resolve) => {
+        const child = spawnSync('lp', ['-d', printerName, filePath], { encoding: 'utf8', timeout: 30000 })
+        resolve({ ok: child.status === 0, error: child.stderr || undefined })
+      })
+    }
+    if (process.platform === 'win32') {
+      return new Promise<{ ok: boolean; error?: string }>((resolve) => {
+        const child = spawnSync('powershell', ['-NoProfile', '-Command', `Start-Process -FilePath "${filePath}" -Verb Print`], { encoding: 'utf8', timeout: 30000 })
+        resolve({ ok: child.status === 0, error: child.stderr || undefined })
+      })
+    }
+    return { ok: false, error: 'unsupported platform' }
   });
 
   // 定时清理过期照片（启动时 + 每 6 小时）
