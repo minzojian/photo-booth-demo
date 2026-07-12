@@ -210,22 +210,22 @@ app.whenReady().then(async () => {
     return settings;
   });
 
-  // 打印机状态检测 — macOS bash LC_ALL=C + Windows PowerShell
+  // 打印机状态检测 — macOS lpstat + 直连 TCP / Windows PowerShell
   const getDetailedStatus = (printerName: string): string => {
     if (process.platform === 'darwin') {
       try {
-        const run = (cmd: string) => {
-          const r = spawnSync('bash', ['-c', `export LC_ALL=C LANG=C LANGUAGE=en && ${cmd}`], { encoding: 'utf8', timeout: 3000 })
+        const lpstat = (args: string[]) => {
+          const r = spawnSync('lpstat', args, { encoding: 'utf8', timeout: 3000 })
           return (r.stdout || '') + (r.stderr || '')
         }
-        const escaped = printerName.replace(/'/g, "'\\''")
-        const full = run(`lpstat -p '${escaped}'`) + run(`lpstat -a '${escaped}'`)
+        const full = lpstat(['-p', printerName]) + lpstat(['-a', printerName])
         console.log('[cups]', printerName, '→', full.trim().replace(/\n/g, ' | '))
-        if (/disabled|rejecting|not accepting/i.test(full)) return 'unavailable'
-        if (/processing|printing/i.test(full)) return 'active'
+        // 中英文关键词匹配
+        if (/disabled|禁用|rejecting|拒绝|not accepting|不接受/i.test(full)) return 'unavailable'
+        if (/processing|打印中|printing|活跃/i.test(full)) return 'active'
 
-        const devUri = run(`lpstat -v '${escaped}'`).trim()
-        const dm = devUri.match(/(?:socket|ipp|ipps|lpd):\/\/([\w.-]+)(?::(\d+))?/i)
+        // 直连 TCP 检测（跳过 dnssd:// Bonjour 地址）
+        const dm = lpstat(['-v', printerName]).match(/(?:socket|ipp|ipps|lpd):\/\/([\w.-]+)(?::(\d+))?/i)
         if (dm) {
           const nc = spawnSync('nc', ['-z', '-w', '2', dm[1], String(parseInt(dm[2] || '631'))], { timeout: 3000 })
           if (nc.status !== 0) return 'unavailable'
@@ -235,12 +235,12 @@ app.whenReady().then(async () => {
     }
     if (process.platform === 'win32') {
       try {
-        const escaped = printerName.replace(/"/g, '`"')
-        const r = spawnSync('powershell', ['-NoProfile', '-Command', `(Get-Printer -Name "${escaped}").PrinterStatus`], { encoding: 'utf8', timeout: 5000 })
-        const status = (r.stdout || '').trim()
-        console.log('[win-printer]', printerName, '→', status || '(no output)')
-        if (!status || /Offline|Error|NotAvailable|Paused/i.test(status)) return 'unavailable'
-        if (/Printing|Busy|Processing/i.test(status)) return 'active'
+        const n = printerName.replace(/"/g, '`"')
+        const r = spawnSync('powershell', ['-NoProfile', '-Command', `(Get-Printer -Name "${n}").PrinterStatus`], { encoding: 'utf8', timeout: 5000 })
+        const s = (r.stdout || '').trim()
+        console.log('[win-printer]', printerName, '→', s || '(no output)')
+        if (!s || /Offline|Error|NotAvailable|Paused/i.test(s)) return 'unavailable'
+        if (/Printing|Busy|Processing/i.test(s)) return 'active'
         return 'idle'
       } catch { return 'idle' }
     }
