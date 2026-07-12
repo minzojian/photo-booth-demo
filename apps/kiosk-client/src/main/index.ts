@@ -210,73 +210,58 @@ app.whenReady().then(async () => {
     return settings;
   });
 
-  // 打印机 — Electron 的 getPrintersAsync 状态码太粗，macOS 用 lpstat 增强
-  const getDetailedStatus = (printerName: string): string | null => {
-    if (process.platform !== 'darwin') return null
-    try {
-      const r = spawnSync('lpstat', ['-p', printerName], { encoding: 'utf8', timeout: 3000 })
-      const out = r.stdout || ''
-      // CUPS 典型输出: "printer Foo is idle.  enabled since ..."
-      //               "printer Foo disabled since ... - reason"
-      //               "printer Foo is idle.  accepting requests ..."
-      if (out.includes('disabled') || out.includes('rejecting')) return 'unavailable'
-      if (out.includes('idle') || out.includes('ready')) return 'idle'
-      if (out.includes('processing') || out.includes('printing')) return 'active'
-      return out.trim() ? 'idle' : null // 有输出但无法归类当作 idle
-    } catch { return null }
-  }
-
-  // macOS CUPS IPP 查询耗材（墨水/碳粉、纸张）——通过 localhost:631
-  const getSupplies = (printerName: string): Promise<{ inkLevels: { name: string; pct: number }[]; paperLevel: number | null } | null> => {
+  // macOS CUPS IPP 查询打印机状态 + 耗材 — 一次 IPP 请求获得全部
+  const queryCupsPrinter = (printerName: string): Promise<{ detailedStatus: string; supplies: { inkLevels: { name: string; pct: number }[] } | null } | null> => {
     return new Promise((resolve) => {
       if (process.platform !== 'darwin') return resolve(null)
-      // 构造 IPP Get-Printer-Attributes 请求体
       const printerUri = `ipp://localhost/printers/${encodeURIComponent(printerName)}`
-      const attrs = [
+      const attrs: [number, string, string][] = [
         [0x47, 'attributes-charset', 'utf-8'],
         [0x48, 'attributes-natural-language', 'en-us'],
         [0x45, 'printer-uri', printerUri],
-        [0x44, 'requested-attributes', 'marker-colors'],
+        [0x44, 'requested-attributes', 'printer-state'],
+        [0x44, 'requested-attributes', 'printer-state-reasons'],
         [0x44, 'requested-attributes', 'marker-levels'],
         [0x44, 'requested-attributes', 'marker-names'],
-        [0x44, 'requested-attributes', 'marker-types'],
+        [0x44, 'requested-attributes', 'marker-colors'],
       ]
       const bodyParts: Buffer[] = []
-      // IPP version 2.0, operation Get-Printer-Attributes (0x000B), request-id 1
       bodyParts.push(Buffer.from([0x02, 0x00, 0x00, 0x0B, 0x00, 0x00, 0x00, 0x01]))
-      bodyParts.push(Buffer.from([0x01])) // operation-attributes-tag
+      bodyParts.push(Buffer.from([0x01]))
       for (const [tag, name, value] of attrs) {
         const nameB = Buffer.from(name, 'utf8')
         const valB = Buffer.from(value, 'utf8')
-        bodyParts.push(Buffer.from([tag, 0x00, nameB.length])) // value-tag + name
+        bodyParts.push(Buffer.from([tag, 0x00, nameB.length]))
         bodyParts.push(nameB)
-        bodyParts.push(Buffer.from([0x00, valB.length])) // value length
+        bodyParts.push(Buffer.from([0x00, valB.length]))
         bodyParts.push(valB)
       }
-      bodyParts.push(Buffer.from([0x03])) // end-of-attributes
+      bodyParts.push(Buffer.from([0x03]))
       const body = Buffer.concat(bodyParts)
 
-      const req = httpRequest({ hostname: '127.0.0.1', port: 631, path: `/printers/${encodeURIComponent(printerName)}`, method: 'POST', headers: { 'Content-Type': 'application/ipp', 'Content-Length': String(body.length) }, timeout: 3000 }, (res) => {
+      const req = httpRequest({ hostname: '127.0.0.1', port: 631, path: `/printers/${encodeURIComponent(printerName)}`, method: 'POST', headers: { 'Content-Type': 'application/ipp', 'Content-Length': String(body.length) }, timeout: 4000 }, (res) => {
         const chunks: Buffer[] = []
         res.on('data', (c: Buffer) => chunks.push(c))
         res.on('end', () => {
           try {
             const data = Buffer.concat(chunks)
             const text = data.toString('utf8')
+
+            // 解析 printer-state-reasons（离线等关键词）
+            const reasonsMatch = text.match(/printer-state-reasons[^]*?value[^]*?([a-z-]+)/i)
+            const reasons = reasonsMatch ? reasonsMatch[1].toLowerCase() : ''
+            const isOffline = reasons.includes('offline') || reasons.includes('unreachable') || reasons.includes('connecting-to-device')
+            const isStopped = text.includes('printer-state') && data[data.indexOf('printer-state') + 30] === 5
+            let detailedStatus = 'idle'
+            if (isOffline || isStopped) detailedStatus = 'unavailable'
+
+            // 解析 marker-levels
             const ink: { name: string; pct: number }[] = []
-            // 解析 IPP 响应中的 marker-* 属性
-            const markerLevels = [...text.matchAll(/marker-levels[^]*?value.*?(\d+)/gi)]
-            const markerNames = [...text.matchAll(/marker-names[^]*?value.*?([a-zA-Z0-9\s]+?)(?=\x00|value)/gi)]
-            // 重新匹配：找到 marker-levels 后面的整数值
-            const levelRe = /marker-levels[\s\S]*?(\x21|\x22|\x23)(.{4})/g
-            // 简化：直接在二进制中搜 marker-levels 后面的 4 字节整数
             const markerIdx = data.indexOf('marker-levels')
             if (markerIdx >= 0) {
-              // IPP integer 格式: 0x21 (integer tag) + 2 bytes name-len + name + 2 bytes value-len + 4 bytes value
               let pos = markerIdx + 'marker-levels'.length
-              // 跳过到 value 部分
               while (pos < data.length - 6) {
-                if (data[pos] === 0x21 || data[pos] === 0x23) { // integer or enum
+                if (data[pos] === 0x21 || data[pos] === 0x23) {
                   const nameLen = data.readUInt16BE(pos + 1)
                   pos += 3 + nameLen
                   const valLen = data.readUInt16BE(pos)
@@ -285,16 +270,12 @@ app.whenReady().then(async () => {
                     const level = data.readInt32BE(pos)
                     pos += 4
                     ink.push({ name: `Ink ${ink.length + 1}`, pct: Math.min(100, Math.max(0, level)) })
-                  } else {
-                    pos += valLen
-                  }
-                } else {
-                  pos++
-                }
-                if (ink.length >= 8) break // 最多 8 个墨盒
+                  } else { pos += valLen }
+                } else { pos++ }
+                if (ink.length >= 8) break
               }
             }
-            resolve(ink.length > 0 ? { inkLevels: ink, paperLevel: null } : null)
+            resolve({ detailedStatus, supplies: ink.length > 0 ? { inkLevels: ink } : null })
           } catch { resolve(null) }
         })
       })
@@ -306,14 +287,12 @@ app.whenReady().then(async () => {
   }
 
   ipcMain.handle('printer:list', () => {
-    const list = (win?.webContents.getPrintersAsync() ?? []).then(async (raw) => {
+    return (win?.webContents.getPrintersAsync() ?? []).then(async (raw) => {
       return Promise.all(raw.map(async (p) => {
-        const detailed = getDetailedStatus(p.name)
-        const supplies = await getSupplies(p.name)
-        return { ...p, detailedStatus: detailed, supplies }
+        const info = await queryCupsPrinter(p.name)
+        return { ...p, detailedStatus: info?.detailedStatus ?? null, supplies: info?.supplies ?? null }
       }))
     })
-    return list
   })
   ipcMain.handle('printer:test', () => {
     win?.webContents.print({ silent: false, printBackground: true }, () => {})

@@ -1347,7 +1347,7 @@ export default function App() {
                       : t('printer.status.idle')
                     const statusColor = isUnavailable ? '#f87171' : isActive ? '#fbbf24' : '#4ade80'
                     const isSelected = appSettings.printerName ? p.name === appSettings.printerName : p.isDefault
-                    const hasSupplies = p.supplies && (p.supplies.inkLevels.length > 0 || p.supplies.paperLevel != null)
+                    const hasSupplies = p.supplies && p.supplies.inkLevels.length > 0
                     return (
                       <div key={i} style={{
                         background: isSelected ? 'rgba(167,139,250,.12)' : 'rgba(255,255,255,.06)',
@@ -1385,15 +1385,6 @@ export default function App() {
                                     <span style={{ width: 32, textAlign: 'right' }}>{ink.pct}%</span>
                                   </div>
                                 ))}
-                                {p.supplies!.paperLevel != null && (
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                    <span style={{ width: 36 }}>{t('printer.paper')}</span>
-                                    <div style={{ flex: 1, height: 6, background: 'rgba(255,255,255,.1)', borderRadius: 3, overflow: 'hidden' }}>
-                                      <div style={{ width: `${p.supplies!.paperLevel}%`, height: '100%', background: p.supplies!.paperLevel! > 20 ? '#4ade80' : '#f87171', borderRadius: 3 }} />
-                                    </div>
-                                    <span style={{ width: 32, textAlign: 'right' }}>{p.supplies!.paperLevel}%</span>
-                                  </div>
-                                )}
                               </div>
                             )}
                           </div>

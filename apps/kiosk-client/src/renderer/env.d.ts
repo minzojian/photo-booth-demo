@@ -29,7 +29,6 @@ export interface AppSettings {
 
 export interface PrinterSupplies {
   inkLevels: { name: string; pct: number }[]
-  paperLevel: number | null // 0-100, null=unknown
 }
 export interface PrinterInfo {
   name: string;
