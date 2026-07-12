@@ -1339,10 +1339,14 @@ export default function App() {
                     <div style={{ color: '#6b7280', fontSize: 14, marginBottom: 12 }}>{t('printer.empty')}</div>
                   )}
                   {printers.map((p, i) => {
-                    const statusLabel = p.status === 0 ? t('printer.status.idle')
-                      : p.status === 1 ? t('printer.status.active')
-                      : t('printer.status.unavailable')
-                    const statusColor = p.status === 0 ? '#4ade80' : p.status === 1 ? '#fbbf24' : '#f87171'
+                    // macOS Printer Simulator 等虚拟打印机会返回非 0/1/2 的状态码（如 3=idle），
+                    // 只有 2 表示真正不可用
+                    const isUnavailable = p.status === 2
+                    const isActive = p.status === 1
+                    const statusLabel = isUnavailable ? t('printer.status.unavailable')
+                      : isActive ? t('printer.status.active')
+                      : t('printer.status.idle')
+                    const statusColor = isUnavailable ? '#f87171' : isActive ? '#fbbf24' : '#4ade80'
                     return (
                       <div key={i} style={{
                         background: 'rgba(255,255,255,.06)',
