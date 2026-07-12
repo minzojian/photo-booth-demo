@@ -210,22 +210,21 @@ app.whenReady().then(async () => {
     return settings;
   });
 
-  // macOS 打印机状态 — 强制英文输出 + 直连 TCP 检测
+  // macOS 打印机状态 — 用 bash -c 强制英文 + 直连 TCP
   const getDetailedStatus = (printerName: string): string => {
     if (process.platform !== 'darwin') return 'idle'
     try {
-      // env LC_ALL=C 作为命令前缀确保英文输出
-      const run = (args: string[]) => {
-        const r = spawnSync('env', ['LC_ALL=C', 'lpstat', ...args], { encoding: 'utf8', timeout: 3000 })
+      const run = (cmd: string) => {
+        const r = spawnSync('bash', ['-c', `export LC_ALL=C LANG=C LANGUAGE=en && ${cmd}`], { encoding: 'utf8', timeout: 3000 })
         return (r.stdout || '') + (r.stderr || '')
       }
-      const full = run(['-p', printerName]) + run(['-a', printerName])
+      const full = run(`lpstat -p '${printerName.replace(/'/g, "'\\''")}'`) + run(`lpstat -a '${printerName.replace(/'/g, "'\\''")}'`)
       console.log('[cups]', printerName, 'lpstat:', full.trim().replace(/\n/g, ' | '))
       if (/disabled|rejecting|not accepting/i.test(full)) return 'unavailable'
       if (/processing|printing/i.test(full)) return 'active'
 
-      // 直连 URI（非 dnssd://Bonjour）做 TCP 检测
-      const devUri = run(['-v', printerName]).trim()
+      // 直连 URI TCP 检测
+      const devUri = run(`lpstat -v '${printerName.replace(/'/g, "'\\''")}'`).trim()
       const directMatch = devUri.match(/(?:socket|ipp|ipps|lpd):\/\/([\w.-]+)(?::(\d+))?/i)
       if (directMatch) {
         const host = directMatch[1]
